@@ -1,0 +1,20 @@
+version: '3'
+services:
+  p4src:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVER_ID: src
+    restart: unless-stopped
+    ports:
+      - 1667:1666
+  p4dst:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVER_ID: dst
+    restart: unless-stopped
+    ports:
+      - 1668:1666
