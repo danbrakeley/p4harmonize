@@ -2,7 +2,9 @@ package p4
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/danbrakeley/bs"
 )
@@ -11,57 +13,63 @@ type P4 struct {
 	Port   string
 	User   string
 	Client string
+
+	// derived values
+	displayName string
+
+	streamDepthMutex sync.Mutex
+	streamDepth      int
 }
 
 func New(port, user, client string) P4 {
+	// try to find the hostname without any protocol prefix or port suffix
+	name := port
+	s := strings.Split(port, ":")
+	i := len(s) - 1
+	if i > 0 {
+		_, err := strconv.ParseInt(s[i], 10, 32)
+		if err == nil {
+			i--
+		}
+		name = s[i]
+	}
+
 	return P4{
-		Port:   port,
-		User:   user,
-		Client: client,
+		Port:        port,
+		User:        user,
+		Client:      client,
+		displayName: name,
 	}
 }
 
-// ListFiles requests all non-deleted files in the form "relative/path:filetype".
-// For example: "Engine/Build/Build.version:text"
-func (p P4) ListFiles() ([]string, error) {
-	var sb strings.Builder
-	sb.Grow(4 * 1024 * 1024) // start big to minimize reallocation
+func (p *P4) DisplayName() string {
+	return p.displayName
+}
 
-	err := bs.Cmdf(`%s -F %%depotFile%%:%%type%% files -e //%s/...`, p.cmd(), p.Client).Out(&sb).RunErr()
-	if err != nil {
-		return nil, fmt.Errorf(`error listing files: %w`, err)
-	}
+// OpenedFiles calls p4 opened and returns the results.
+// Order of resulting slice is alphabetical by Path, ignoring case.
+func (p *P4) OpenedFiles() ([]DepotFile, error) {
+	return p.runAndParseDepotFiles(fmt.Sprintf(`%s -z tag opened -a -C %s`, p.cmd(), p.Client))
+}
 
-	lines := strings.Split(sb.String(), "\n")
-	sortCaseInsensitive(lines)
-
-	// cull blank lines (which should all have been sorted to the top)
-	for len(strings.TrimSpace(lines[0])) == 0 {
-		lines = lines[1:]
-	}
-
-	// find common prefix
-	depth, err := p.StreamDepth()
-	if err != nil {
-		return nil, err
-	}
-	prefix, err := getStreamPrefix(lines[0], depth)
-	if err != nil {
-		return nil, err
-	}
-
-	// trim that prefix off every line
-	for i := range lines {
-		lines[i] = strings.TrimSpace(strings.TrimPrefix(lines[i], prefix))
-	}
-
-	return lines, nil
+// DepotFiles does a "files -e" and returns the results.
+// Order of resulting slice is alphabetical by Path, ignoring case.
+func (p *P4) DepotFiles() ([]DepotFile, error) {
+	return p.runAndParseDepotFiles(fmt.Sprintf(`%s -z tag files -e //%s/...`, p.cmd(), p.Client))
 }
 
 // StreamDepth requests a client's Stream, then parses it to determine the stream's depth.
 // A stream named //foo/bar has a depth of 2, and //foo/bar/baz has a depth of 3.
-func (p P4) StreamDepth() (int, error) {
+func (p *P4) StreamDepth() (int, error) {
+	p.streamDepthMutex.Lock()
+	defer p.streamDepthMutex.Unlock()
+
+	if p.streamDepth > 0 {
+		return p.streamDepth, nil
+	}
+
 	var sb strings.Builder
+	sb.Grow(2 * 1024)
 	err := bs.Cmdf(`%s -z tag client -o`, p.cmd()).Out(&sb).RunErr()
 	if err != nil {
 		return 0, fmt.Errorf(`error viewing workspace "%s": %w`, p.Client, err)
@@ -83,12 +91,14 @@ func (p P4) StreamDepth() (int, error) {
 		return 0, fmt.Errorf(`unable to parse depth from stream "%s"`, stream)
 	}
 
+	p.streamDepth = count
+
 	return count, nil
 }
 
 // helpers
 
-func (p P4) cmd() string {
+func (p *P4) cmd() string {
 	out := strings.Builder{}
 	out.WriteString("p4")
 	if len(p.Port) > 0 {
@@ -116,20 +126,4 @@ func getFieldFromSpec(spec, field string) string {
 		}
 	}
 	return ""
-}
-
-// getStreamPrefix returns the stream prefix given a line that includes the prefix and the stream depth
-// For example: ("//a/b/c/d:foo", 2) would return "//a/b/"
-func getStreamPrefix(line string, depth int) (string, error) {
-	if !strings.HasPrefix(line, "//") {
-		return "", fmt.Errorf(`line "%s" does not begin with "//"`, line)
-	}
-	i := 2
-	for depth > 0 {
-		i += strings.Index(line[i:], "/")
-		i++
-		depth--
-	}
-
-	return line[:i], nil
 }

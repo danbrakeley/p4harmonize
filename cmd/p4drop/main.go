@@ -17,16 +17,17 @@ var (
 
 func main() {
 	bs.SetVerboseEnvVarName("VERBOSE")
+	log := MakeLogger()
 
 	cfg, err := loadConfigFromFirstFile(configFileNames)
 	if err != nil {
-		bs.Warnf("Failed to load config: %v", err)
+		log.Warn("Failed to load config: %v", err)
 		os.Exit(1)
 	}
 
-	err = UpdateLocalToMatchEpic(cfg)
+	err = UpdateLocalToMatchEpic(log, cfg)
 	if err != nil {
-		bs.Warnf("%v", err)
+		log.Warn("%v", err)
 		os.Exit(1)
 	}
 
