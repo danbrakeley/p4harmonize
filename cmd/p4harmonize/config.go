@@ -46,7 +46,7 @@ func loadConfigFromFirstFile(paths []string) (Config, error) {
 			return loadConfigFromFile(path)
 		}
 	}
-	return Config{}, fmt.Errorf("%v do not exist", strings.Join(paths, ", "))
+	return Config{}, fmt.Errorf("%v not found", strings.Join(paths, " or "))
 }
 
 func loadConfigFromFile(path string) (Config, error) {

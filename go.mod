@@ -1,4 +1,4 @@
-module github.com/proletariatgames/p4drop
+module github.com/proletariatgames/p4harmonize
 
 go 1.16
 

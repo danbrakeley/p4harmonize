@@ -8,8 +8,8 @@ import (
 var (
 	// config will be loaded from the first extant file from this list
 	configFileNames = []string{
-		"p4drop.toml",
-		"p4drop.tml",
+		"config.toml",
+		"config.tml",
 	}
 )
 

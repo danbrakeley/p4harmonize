@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/danbrakeley/bs"
-	"github.com/proletariatgames/p4drop/internal/p4"
+	"github.com/proletariatgames/p4harmonize/internal/p4"
 )
 
 func UpdateLocalToMatchEpic(log Logger, cfg Config) error {

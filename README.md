@@ -1,4 +1,4 @@
-# p4drop (p4 harmonize? p4jibe? p4equate?)
+# p4harmonize
 
 ## TODO:
 
@@ -23,7 +23,7 @@
 
 ## Setup local dev environment
 
-Note: `p4drop` assumes you have bash locally (on Windows, just install Git for Windows, which includes git bash).
+Note: `p4harmonize` assumes you have bash locally (on Windows, just install Git for Windows, which includes git bash).
 
 - Install Go 1.16 or newer.
 - In bash (Git Bash on Windows), run `scripts/setup.sh`.
@@ -32,7 +32,7 @@ Note: `p4drop` assumes you have bash locally (on Windows, just install Git for W
 
 ## Build/run
 
-Once all dependancies are installed, open a fresh bash shell and cd into the root folder for p4drop (going into subfolders will cause `mage` to fail with `No .go files marked with the mage build tag in this directory.`).
+Once all dependancies are installed, open a fresh bash shell and cd into the root folder for p4harmonize (going into subfolders will cause `mage` to fail with `No .go files marked with the mage build tag in this directory.`).
 
 Running `mage` with no arguments will list all available targets:
 
@@ -52,17 +52,17 @@ Some targets take arguments, for example:
 $ mage build
 not enough arguments for target "Build", expected 1, got 0
 
-$ mage build p4drop
-Building p4drop.exe...
+$ mage build p4harmonize
+Building p4harmonize.exe...
 ```
 
 Each buildable app has its own subfolder in the `cmd` folder, so you can just `ls cmd` to list all the buildable targets:
 
 ```text
 $ ls cmd
-p4drop/  functests/
+p4harmonize/  functests/
 ```
 
-In the above case, you have two buildable targets: `mage build p4drop` and `mage build functests`.
+In the above case, you have two buildable targets: `mage build p4harmonize` and `mage build functests`.
 
 The build command puts the executable in the `local` folder, and the run command cds into local, then runs the exe.
