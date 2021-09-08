@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/danbrakeley/bs"
+	"github.com/danbrakeley/frog"
 )
 
 var (
@@ -16,20 +14,25 @@ var (
 )
 
 func main() {
+	// create a logger and patch bs to use it instead of stdout/stderr
+	log := MakeLogger(frog.New(frog.Auto, frog.HideLevel, frog.MessageOnRight, frog.FieldIndent10), "")
+	bs.SetColorsEnabled(false)
+	bs.SetStdout(LogVerboseWriter(log))
+	bs.SetStderr(LogWarningWriter(log))
 	bs.SetVerboseEnvVarName("VERBOSE")
-	log := MakeLogger()
+	bs.SetVerbose(true)
 
 	cfg, err := loadConfigFromFirstFile(configFileNames)
 	if err != nil {
-		log.Warn("Failed to load config: %v", err)
-		os.Exit(1)
+		log.Fatal("Failed to load config: %v", err)
 	}
+
+	log.Info("Config loaded from %s", cfg.Filename())
 
 	err = UpdateLocalToMatchEpic(log, cfg)
 	if err != nil {
-		log.Warn("%v", err)
-		os.Exit(1)
+		log.Fatal("%v", err)
 	}
 
-	fmt.Println("Success!")
+	log.Info("Success!")
 }

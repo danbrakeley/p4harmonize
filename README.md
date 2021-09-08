@@ -1,8 +1,32 @@
-# p4drop
+# p4drop (p4 harmonize? p4jibe? p4equate?)
+
+## TODO:
+
+- pick a name
+- get epic client's root folder
+- ensure epic root folder exists
+- for each file in the epic file list (TODO: spread this work across multiple workers?)
+  - if file is in local
+    - if local casing doesn't match epic
+      - mark for rename (?)
+    - else
+      - mark for edit
+  - copy file from epic root to local client root (which we just created, so we know it starts empty)
+  - if file wasn't in local CL, mark for add (use epic casing)
+  - ensure filetype is set correctly
+- for each file in local but NOT in epic (add epic files to map in previous loop?)
+  - mark for delete
+- improve logging of Exec/Bash from bs
+  - extract cmd logic into its own project?
+  - or change bs to be instance-based instead of global?
+- clean up naming - don't use epic/local, instead use source/target? src/dst? read/write? something like that
 
 ## Setup local dev environment
 
-- In git-bash, run `scripts/setup.sh`.
+Note: `p4drop` assumes you have bash locally (on Windows, just install Git for Windows, which includes git bash).
+
+- Install Go 1.16 or newer.
+- In bash (Git Bash on Windows), run `scripts/setup.sh`.
   - It may halt and ask you to install something. Once you've done that, run it again.
   - Repeat until it says "All dependancies are installed."
 

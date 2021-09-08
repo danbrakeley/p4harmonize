@@ -10,19 +10,32 @@ import (
 	"github.com/danbrakeley/bs"
 )
 
-type P4Config struct {
-	P4Port   string
-	P4User   string
-	P4Client string
+type EpicConfig struct {
+	P4Port   string `toml:"p4port"`
+	P4User   string `toml:"p4user"`
+	P4Client string `toml:"p4client"`
+}
 
-	name string // display name used in error messages and status reports, set in loadConfig
+type LocalConfig struct {
+	P4Port       string `toml:"p4port"`
+	P4User       string `toml:"p4user"`
+	ClientName   string `toml:"new_client_name"`
+	ClientRoot   string `toml:"new_client_root"`
+	ClientStream string `toml:"new_client_stream"`
 }
 
 type Config struct {
-	Epic  P4Config
-	Local P4Config
+	Epic  EpicConfig  `toml:"epic"`
+	Local LocalConfig `toml:"local"`
 
-	// TODO: commit message strings
+	// TODO: commit message strings?
+
+	// save the file from which this config was loaded, for logging purposes
+	filename string
+}
+
+func (c *Config) Filename() string {
+	return c.filename
 }
 
 // Load helpers
@@ -42,7 +55,9 @@ func loadConfigFromFile(path string) (Config, error) {
 		return Config{}, fmt.Errorf(`error opening "%s": %w`, path, err)
 	}
 	defer f.Close()
-	return loadConfig(f)
+	cfg, err := loadConfig(f)
+	cfg.filename = path
+	return cfg, err
 }
 
 func loadConfigFromString(s string) (Config, error) {
@@ -54,9 +69,6 @@ func loadConfig(r io.Reader) (Config, error) {
 	if _, err := toml.NewDecoder(r).Decode(&cfg); err != nil {
 		return Config{}, err
 	}
-
-	cfg.Epic.name = "epic's server"
-	cfg.Local.name = "local server"
 
 	return cfg, nil
 }

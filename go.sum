@@ -1,8 +1,15 @@
 github.com/BurntSushi/toml v0.4.1 h1:GaI7EiDXDRfa8VshkTj7Fym7ha+y8/XxIgD2okUIjLw=
 github.com/BurntSushi/toml v0.4.1/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
-github.com/danbrakeley/bs v0.1.3 h1:Amk4IMnz4J+whXTYG1qlGh8OQqDvWb7hdL1x8kgFFi0=
-github.com/danbrakeley/bs v0.1.3/go.mod h1:L7HrpqW5Q+G8zVLSpdZMePKT4xlip2/54yF3kPHbxTQ=
+github.com/danbrakeley/bs v0.1.4 h1:G+hb6k7lDOtAtJx4tPidhrTidP5BdUybn6mY3uRICkE=
+github.com/danbrakeley/bs v0.1.4/go.mod h1:L7HrpqW5Q+G8zVLSpdZMePKT4xlip2/54yF3kPHbxTQ=
 github.com/danbrakeley/commandline v1.0.0 h1:9qOX7wnJxECT0ZEZav6P5/GVdX/xSsPnIwQ9ptpMUuc=
 github.com/danbrakeley/commandline v1.0.0/go.mod h1:TebcfPCZN3Dpc0DZMp68KTbVzCr07KCfAVkrYlLi2is=
+github.com/danbrakeley/frog v0.7.4 h1:hGcZZXcGkXlWniOYH5htLIK8JIb6x4Jf6WcXEq82TtM=
+github.com/danbrakeley/frog v0.7.4/go.mod h1:pRQBG1/ZL/kDt6uVcqr5F5kAHvk9DFde+XTexfj2Uuo=
 github.com/magefile/mage v1.11.0 h1:C/55Ywp9BpgVVclD3lRnSYCwXTYxmSppIgLeDYlNuls=
 github.com/magefile/mage v1.11.0/go.mod h1:z5UZb/iS3GoOSn0JgWuiw7dxlurVYTu+/jHXqQg881A=
+github.com/mattn/go-isatty v0.0.13 h1:qdl+GuBjcsKKDco5BsxPJlId98mSWNKqYA+Co0SC1yA=
+github.com/mattn/go-isatty v0.0.13/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Kysco4FUpU=
+golang.org/x/sys v0.0.0-20200116001909-b77594299b42/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
+golang.org/x/sys v0.0.0-20210906170528-6f6e22806c34 h1:GkvMjFtXUmahfDtashnc1mnrCtuBVcwse5QV2lUk/tI=
+golang.org/x/sys v0.0.0-20210906170528-6f6e22806c34/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=

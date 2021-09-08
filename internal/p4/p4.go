@@ -1,7 +1,10 @@
 package p4
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,8 +20,9 @@ type P4 struct {
 	// derived values
 	displayName string
 
-	streamDepthMutex sync.Mutex
-	streamDepth      int
+	streamMutex sync.Mutex
+	streamName  string
+	streamDepth int
 }
 
 func New(port, user, client string) P4 {
@@ -46,6 +50,69 @@ func (p *P4) DisplayName() string {
 	return p.displayName
 }
 
+func (p *P4) SetStreamName(stream string) error {
+	p.streamMutex.Lock()
+	defer p.streamMutex.Unlock()
+	depth, err := streamDepthFromName(stream)
+	if err != nil {
+		return err
+	}
+	p.streamName = stream
+	p.streamDepth = depth
+	return nil
+}
+
+// GetLatest runs p4 sync ...#head
+func (p *P4) GetLatest(wout, werr io.Writer) error {
+	err := bs.Cmdf(`%s sync //%s/...#head`, p.cmd(), p.Client).Out(wout).Err(werr).RunErr()
+	if err != nil {
+		return fmt.Errorf(`error syncing %s to head: %w`, p.Client, err)
+	}
+	return nil
+}
+
+// FakeLatest runs p4 sync -k ...#head
+func (p *P4) FakeLatest(werr io.Writer) error {
+	err := bs.Cmdf(`%s sync -k //%s/...#head`, p.cmd(), p.Client).Out(nil).Err(werr).RunErr()
+	if err != nil {
+		return fmt.Errorf(`error fake-syncing %s to head: %w`, p.Client, err)
+	}
+	return nil
+}
+
+// Clients returns a list of client names
+func (p *P4) Clients() ([]string, error) {
+	var out []string
+	err := cmdAndScan(
+		fmt.Sprintf(`%s -F %%domainName%% clients -u %s`, p.cmd(), p.User),
+		func(line string) error {
+			out = append(out, strings.TrimSpace(line))
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf(`error listing clients: %w`, err)
+	}
+	return out, nil
+}
+
+// CreateClient creates a new client with the given parameters
+func (p *P4) CreateClient(wout, werr io.Writer, name string, root string, stream string) error {
+	absoluteRoot, err := filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf(`filed to get absolute path for "%s": %w`, root, err)
+	}
+	bashCmd := fmt.Sprintf(
+		`%s --field "Root=%s" --field "Stream=%s" --field "View=%s/... //%s/..." client -o %s | %s client -i`,
+		p.cmd(), absoluteRoot, stream, stream, name, name, p.cmd(),
+	)
+	err = bs.Cmd(bashCmd).Out(wout).Err(werr).BashErr()
+	if err != nil {
+		return fmt.Errorf(`error creating client %s: %w`, p.Client, err)
+	}
+	return nil
+}
+
 // OpenedFiles calls p4 opened and returns the results.
 // Order of resulting slice is alphabetical by Path, ignoring case.
 func (p *P4) OpenedFiles() ([]DepotFile, error) {
@@ -61,39 +128,35 @@ func (p *P4) DepotFiles() ([]DepotFile, error) {
 // StreamDepth requests a client's Stream, then parses it to determine the stream's depth.
 // A stream named //foo/bar has a depth of 2, and //foo/bar/baz has a depth of 3.
 func (p *P4) StreamDepth() (int, error) {
-	p.streamDepthMutex.Lock()
-	defer p.streamDepthMutex.Unlock()
+	p.streamMutex.Lock()
+	defer p.streamMutex.Unlock()
 
 	if p.streamDepth > 0 {
 		return p.streamDepth, nil
 	}
 
-	var sb strings.Builder
-	sb.Grow(2 * 1024)
-	err := bs.Cmdf(`%s -z tag client -o`, p.cmd()).Out(&sb).RunErr()
-	if err != nil {
-		return 0, fmt.Errorf(`error viewing workspace "%s": %w`, p.Client, err)
-	}
+	var stream string
+	if len(p.streamName) == 0 {
+		var sb strings.Builder
+		sb.Grow(2 * 1024)
+		err := bs.Cmdf(`%s -z tag client -o`, p.cmd()).Out(&sb).RunErr()
+		if err != nil {
+			return 0, fmt.Errorf(`error viewing workspace "%s": %w`, p.Client, err)
+		}
 
-	stream := getFieldFromSpec(sb.String(), "Stream")
-	if len(stream) == 0 {
-		return 0, fmt.Errorf(`stream name not found for client "%s"`, p.Client)
-	}
-
-	count := -1
-	for _, r := range stream {
-		if r == '/' {
-			count++
+		stream = getFieldFromSpec(sb.String(), "Stream")
+		if len(stream) == 0 {
+			return 0, fmt.Errorf(`stream name not found for client "%s"`, p.Client)
 		}
 	}
 
-	if count < 1 {
-		return 0, fmt.Errorf(`unable to parse depth from stream "%s"`, stream)
+	depth, err := streamDepthFromName(stream)
+	if err != nil {
+		p.streamDepth = depth
+		p.streamName = stream
 	}
 
-	p.streamDepth = count
-
-	return count, nil
+	return depth, err
 }
 
 // helpers
@@ -116,6 +179,19 @@ func (p *P4) cmd() string {
 	return out.String()
 }
 
+func streamDepthFromName(stream string) (int, error) {
+	count := -1
+	for _, r := range stream {
+		if r == '/' {
+			count++
+		}
+	}
+	if count < 1 {
+		return 0, fmt.Errorf(`unable to get stream depth of "%s"`, stream)
+	}
+	return count, nil
+}
+
 // getFieldFromSpec extracts the value of a field from a perforce spec that was formatted via -z tag
 func getFieldFromSpec(spec, field string) string {
 	lines := strings.Split(spec, "\n")
@@ -126,4 +202,28 @@ func getFieldFromSpec(spec, field string) string {
 		}
 	}
 	return ""
+}
+
+// cmdAndScan streams the output of a cmd into a scanner, which calls the passed func for each line
+func cmdAndScan(cmd string, fnEachLine func(line string) error) error {
+	r, w := io.Pipe()
+	chCmd := make(chan error)
+	go func() {
+		err := bs.Cmd(cmd).Out(w).RunErr()
+		w.Close()
+		chCmd <- err
+	}()
+
+	s := bufio.NewScanner(r)
+	for s.Scan() {
+		err := fnEachLine(s.Text())
+		if err != nil {
+			r.CloseWithError(err)
+		}
+	}
+	err := <-chCmd
+	if err == nil {
+		err = s.Err()
+	}
+	return err
 }
