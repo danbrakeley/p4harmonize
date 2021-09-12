@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/danbrakeley/bs"
 	"github.com/danbrakeley/frog"
 )
 
@@ -14,13 +13,8 @@ var (
 )
 
 func main() {
-	// create a logger and patch bs to use it instead of stdout/stderr
+	// create a logger and a bsh instance that uses it
 	log := MakeLogger(frog.New(frog.Auto, frog.HideLevel, frog.MessageOnRight, frog.FieldIndent10), "")
-	bs.SetColorsEnabled(false)
-	bs.SetStdout(LogVerboseWriter(log))
-	bs.SetStderr(LogWarningWriter(log))
-	bs.SetVerboseEnvVarName("VERBOSE")
-	bs.SetVerbose(true)
 
 	cfg, err := loadConfigFromFirstFile(configFileNames)
 	if err != nil {

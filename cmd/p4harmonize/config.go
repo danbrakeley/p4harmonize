@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/danbrakeley/bs"
 )
 
 type EpicConfig struct {
@@ -42,8 +41,10 @@ func (c *Config) Filename() string {
 
 func loadConfigFromFirstFile(paths []string) (Config, error) {
 	for _, path := range paths {
-		if bs.IsFile(path) {
+		if _, err := os.Stat(path); err == nil {
 			return loadConfigFromFile(path)
+		} else if !os.IsNotExist(err) {
+			return Config{}, fmt.Errorf(`error determining if "%s" exists: %v`, path, err)
 		}
 	}
 	return Config{}, fmt.Errorf("%v not found", strings.Join(paths, " or "))

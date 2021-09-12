@@ -1,14 +1,9 @@
 package p4
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
-	"sync"
-
-	"github.com/danbrakeley/bs"
 )
 
 type DepotFile struct {
@@ -31,63 +26,53 @@ func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
 		return nil, err
 	}
 
-	var errCmd error
-	r, w := io.Pipe()
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		errCmd = bs.Cmd(cmd).Out(w).RunErr()
-		w.Close()
-		wg.Done()
-	}()
-
 	out := make([]DepotFile, 0, 1024*1024)
 	var cur DepotFile
 	var prefix string
-	s := bufio.NewScanner(r)
-	for s.Scan() {
-		line := strings.TrimSpace(s.Text())
-		// p4 -ztag uses an empty line to indicate the end of a record
-		if len(line) == 0 {
-			if len(cur.Path) != 0 {
-				out = append(out, cur)
-			}
-			cur = DepotFile{}
-			continue
-		}
-		// otherwise, parse the fields
-		switch {
-		case len(line) < 5 || !strings.HasPrefix(line, "... "):
-			r.CloseWithError(fmt.Errorf(`expected "... <tag>", but got: %s`, line))
-		case strings.HasPrefix(line[4:], "depotFile"):
-			raw := strings.TrimSpace(line[14:])
-			if len(prefix) == 0 {
-				var err error
-				prefix, err = getDepotPrefix(raw, streamDepth)
-				if err != nil {
-					r.CloseWithError(fmt.Errorf(`error parsing depot prefix: %w`, err))
-					break
+	err = p.cmdAndScan(
+		cmd,
+		func(rawLine string) error {
+			line := strings.TrimSpace(rawLine)
+
+			// p4 -ztag uses an empty line to indicate the end of a record
+			if len(line) == 0 {
+				if len(cur.Path) != 0 {
+					out = append(out, cur)
 				}
+				cur = DepotFile{}
+				return nil
 			}
-			cur.Path = strings.TrimPrefix(raw, prefix)
-		case strings.HasPrefix(line[4:], "action"):
-			cur.Action = strings.TrimSpace(line[10:])
-		case strings.HasPrefix(line[4:], "change"):
-			cur.CL = strings.TrimSpace(line[10:])
-		case strings.HasPrefix(line[4:], "type"):
-			cur.Type = strings.TrimSpace(line[8:])
-		}
-	}
-	// if the reader had an error, the scanner will stop scanning and return it here
-	if err := s.Err(); err != nil {
-		return nil, fmt.Errorf(`error scanning for files: %w`, err)
+
+			// otherwise, parse the fields
+			switch {
+			case len(line) < 5 || !strings.HasPrefix(line, "... "):
+				return fmt.Errorf(`expected "... <tag>", but got: %s`, line)
+			case strings.HasPrefix(line[4:], "depotFile"):
+				raw := strings.TrimSpace(line[14:])
+				if len(prefix) == 0 {
+					var err error
+					prefix, err = getDepotPrefix(raw, streamDepth)
+					if err != nil {
+						return fmt.Errorf(`error parsing depot prefix: %w`, err)
+					}
+				}
+				cur.Path = strings.TrimPrefix(raw, prefix)
+			case strings.HasPrefix(line[4:], "action"):
+				cur.Action = strings.TrimSpace(line[10:])
+			case strings.HasPrefix(line[4:], "change"):
+				cur.CL = strings.TrimSpace(line[10:])
+			case strings.HasPrefix(line[4:], "type"):
+				cur.Type = strings.TrimSpace(line[8:])
+			}
+
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf(`error listing files: %w`, err)
 	}
 
-	wg.Wait()
-	if errCmd != nil {
-		return nil, fmt.Errorf(`error listing files: %w`, errCmd)
-	}
-
+	// sort in-place, alphabetical, ignoring case
 	sort.Sort(DepotFileCaseInsensitive(out))
 
 	return out, nil

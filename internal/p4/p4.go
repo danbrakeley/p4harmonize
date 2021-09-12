@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"strconv"
+	"regexp"
 	"strings"
 	"sync"
 
-	"github.com/danbrakeley/bs"
+	"github.com/danbrakeley/bsh"
 )
 
 type P4 struct {
@@ -17,37 +17,24 @@ type P4 struct {
 	User   string
 	Client string
 
-	// derived values
-	displayName string
+	sh *bsh.Bsh
 
 	streamMutex sync.Mutex
-	streamName  string
-	streamDepth int
+	streamName  string // read/write requires mutex lock
+	streamDepth int    // read/write requires mutex lock
 }
 
-func New(port, user, client string) P4 {
-	// try to find the hostname without any protocol prefix or port suffix
-	name := port
-	s := strings.Split(port, ":")
-	i := len(s) - 1
-	if i > 0 {
-		_, err := strconv.ParseInt(s[i], 10, 32)
-		if err == nil {
-			i--
-		}
-		name = s[i]
-	}
-
+func New(sh *bsh.Bsh, port, user, client string) P4 {
 	return P4{
-		Port:        port,
-		User:        user,
-		Client:      client,
-		displayName: name,
+		Port:   port,
+		User:   user,
+		Client: client,
+		sh:     sh,
 	}
 }
 
 func (p *P4) DisplayName() string {
-	return p.displayName
+	return p.Port
 }
 
 func (p *P4) SetStreamName(stream string) error {
@@ -62,18 +49,19 @@ func (p *P4) SetStreamName(stream string) error {
 	return nil
 }
 
-// GetLatest runs p4 sync ...#head
-func (p *P4) GetLatest(wout, werr io.Writer) error {
-	err := bs.Cmdf(`%s sync //%s/...#head`, p.cmd(), p.Client).Out(wout).Err(werr).RunErr()
+// SyncLatest runs p4 sync ...#head
+func (p *P4) SyncLatest() error {
+	err := p.sh.Cmdf(`%s sync //%s/...#head`, p.cmd(), p.Client).RunErr()
 	if err != nil {
 		return fmt.Errorf(`error syncing %s to head: %w`, p.Client, err)
 	}
 	return nil
 }
 
-// FakeLatest runs p4 sync -k ...#head
-func (p *P4) FakeLatest(werr io.Writer) error {
-	err := bs.Cmdf(`%s sync -k //%s/...#head`, p.cmd(), p.Client).Out(nil).Err(werr).RunErr()
+// SyncLatestNoDownload runs "p4 sync -k ...#head" which will:
+// "Keep existing workspace files; update the have list without updating the client workspace"
+func (p *P4) SyncLatestNoDownload() error {
+	err := p.sh.Cmdf(`%s sync -k //%s/...#head`, p.cmd(), p.Client).Out(nil).RunErr()
 	if err != nil {
 		return fmt.Errorf(`error fake-syncing %s to head: %w`, p.Client, err)
 	}
@@ -83,7 +71,7 @@ func (p *P4) FakeLatest(werr io.Writer) error {
 // Clients returns a list of client names
 func (p *P4) Clients() ([]string, error) {
 	var out []string
-	err := cmdAndScan(
+	err := p.cmdAndScan(
 		fmt.Sprintf(`%s -F %%domainName%% clients -u %s`, p.cmd(), p.User),
 		func(line string) error {
 			out = append(out, strings.TrimSpace(line))
@@ -96,19 +84,24 @@ func (p *P4) Clients() ([]string, error) {
 	return out, nil
 }
 
+var reClientName = regexp.MustCompile("^[a-zA-Z0-9_-]+$")
+
 // CreateClient creates a new client with the given parameters
-func (p *P4) CreateClient(wout, werr io.Writer, name string, root string, stream string) error {
+func (p *P4) CreateClient(clientname string, root string, stream string) error {
+	if !reClientName.MatchString(clientname) {
+		return fmt.Errorf(`invalid client name "%s"`, clientname)
+	}
 	absoluteRoot, err := filepath.Abs(root)
 	if err != nil {
-		return fmt.Errorf(`filed to get absolute path for "%s": %w`, root, err)
+		return fmt.Errorf(`failed to get absolute path for "%s": %w`, root, err)
 	}
 	bashCmd := fmt.Sprintf(
 		`%s --field "Root=%s" --field "Stream=%s" --field "View=%s/... //%s/..." client -o %s | %s client -i`,
-		p.cmd(), absoluteRoot, stream, stream, name, name, p.cmd(),
+		p.cmd(), absoluteRoot, stream, stream, clientname, clientname, p.cmd(),
 	)
-	err = bs.Cmd(bashCmd).Out(wout).Err(werr).BashErr()
+	err = p.sh.Cmd(bashCmd).BashErr()
 	if err != nil {
-		return fmt.Errorf(`error creating client %s: %w`, p.Client, err)
+		return fmt.Errorf(`error creating client "%s": %w`, p.Client, err)
 	}
 	return nil
 }
@@ -139,7 +132,7 @@ func (p *P4) StreamDepth() (int, error) {
 	if len(p.streamName) == 0 {
 		var sb strings.Builder
 		sb.Grow(2 * 1024)
-		err := bs.Cmdf(`%s -z tag client -o`, p.cmd()).Out(&sb).RunErr()
+		err := p.sh.Cmdf(`%s -z tag client -o`, p.cmd()).Out(&sb).RunErr()
 		if err != nil {
 			return 0, fmt.Errorf(`error viewing workspace "%s": %w`, p.Client, err)
 		}
@@ -205,11 +198,11 @@ func getFieldFromSpec(spec, field string) string {
 }
 
 // cmdAndScan streams the output of a cmd into a scanner, which calls the passed func for each line
-func cmdAndScan(cmd string, fnEachLine func(line string) error) error {
+func (p *P4) cmdAndScan(cmd string, fnEachLine func(line string) error) error {
 	r, w := io.Pipe()
 	chCmd := make(chan error)
 	go func() {
-		err := bs.Cmd(cmd).Out(w).RunErr()
+		err := p.sh.Cmd(cmd).Out(w).RunErr()
 		w.Close()
 		chCmd <- err
 	}()

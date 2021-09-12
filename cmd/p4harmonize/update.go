@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
 
-	"github.com/danbrakeley/bs"
+	"github.com/danbrakeley/bsh"
 	"github.com/proletariatgames/p4harmonize/internal/p4"
 )
 
@@ -14,8 +15,6 @@ func UpdateLocalToMatchEpic(log Logger, cfg Config) error {
 	if err = PreFlightChecks(log, cfg); err != nil {
 		return err
 	}
-
-	local := p4.New(cfg.Local.P4Port, cfg.Local.P4User, "")
 
 	// Start Epic sync in the background
 
@@ -29,21 +28,24 @@ func UpdateLocalToMatchEpic(log Logger, cfg Config) error {
 
 	// Create local client
 
+	sh := MakeLoggingBsh(log)
+	local := p4.New(sh, cfg.Local.P4Port, cfg.Local.P4User, "")
+
 	log.Info("Creating client %s on %s...", cfg.Local.ClientName, local.DisplayName())
 
-	err = local.CreateClient(LogVerboseWriter(log), LogWarningWriter(log), cfg.Local.ClientName, cfg.Local.ClientRoot, cfg.Local.ClientStream)
+	err = local.CreateClient(cfg.Local.ClientName, cfg.Local.ClientRoot, cfg.Local.ClientStream)
 	if err != nil {
 		return fmt.Errorf(`Failed to create client %s: %w`, local.Client, err)
 	}
 	// rebuild the local P4 to include the new client and stream
-	local = p4.New(cfg.Local.P4Port, cfg.Local.P4User, cfg.Local.ClientName)
+	local = p4.New(sh, cfg.Local.P4Port, cfg.Local.P4User, cfg.Local.ClientName)
 	local.SetStreamName(cfg.Local.ClientStream)
 
 	// Force perforce to think you have synced everything already
 
-	log.Info("Slamming %s to head without actually syncing any files...", cfg.Local.ClientName)
+	log.Info("Slamming %s to head without transferring any files...", cfg.Local.ClientName)
 
-	err = local.FakeLatest(LogWarningWriter(log))
+	err = local.SyncLatestNoDownload()
 	if err != nil {
 		return err
 	}
@@ -75,11 +77,12 @@ func UpdateLocalToMatchEpic(log Logger, cfg Config) error {
 // involving the Epic perforce server (which can be slow to respond), and before
 // doing any action that might take a while to complete.
 func PreFlightChecks(log Logger, cfg Config) error {
-	local := p4.New(cfg.Local.P4Port, cfg.Local.P4User, "")
+	sh := MakeLoggingBsh(log)
+	local := p4.New(sh, cfg.Local.P4Port, cfg.Local.P4User, "")
 
 	log.Info("Checking folders and clients for %s...", local.DisplayName())
 
-	if bs.Exists(cfg.Local.ClientRoot) {
+	if sh.Exists(cfg.Local.ClientRoot) {
 		return fmt.Errorf("Local client root %s already exists. "+
 			"Please delete it, or change local.new_client_root in your config file, then try again.", cfg.Local.ClientRoot)
 	}
@@ -109,11 +112,12 @@ func PreFlightChecks(log Logger, cfg Config) error {
 // EpicSyncAndList connects to the Epic perforce server, syncs to head, then
 // requests a list of all file names and types.
 func EpicSyncAndList(log Logger, cfg Config, epicFiles *[]p4.DepotFile) error {
-	epic := p4.New(cfg.Epic.P4Port, cfg.Epic.P4User, cfg.Epic.P4Client)
+	sh := MakeLoggingBsh(log)
+	epic := p4.New(sh, cfg.Epic.P4Port, cfg.Epic.P4User, cfg.Epic.P4Client)
 
 	log.Info("Getting latest from %s...", epic.DisplayName())
 
-	err := epic.GetLatest(LogVerboseWriter(log), LogWarningWriter(log))
+	err := epic.SyncLatest()
 	if err != nil {
 		return err
 	}
@@ -127,4 +131,16 @@ func EpicSyncAndList(log Logger, cfg Config, epicFiles *[]p4.DepotFile) error {
 
 	*epicFiles = files
 	return nil
+}
+
+func MakeLoggingBsh(log Logger) *bsh.Bsh {
+	sh := &bsh.Bsh{
+		Stdin:        os.Stdin,
+		Stdout:       LogVerboseWriter(log),
+		Stderr:       LogWarningWriter(log),
+		DisableColor: true,
+	}
+	sh.SetVerboseEnvVarName("VERBOSE")
+	sh.SetVerbose(true)
+	return sh
 }

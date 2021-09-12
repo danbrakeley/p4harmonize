@@ -2,7 +2,6 @@
 
 ## TODO:
 
-- pick a name
 - get epic client's root folder
 - ensure epic root folder exists
 - for each file in the epic file list (TODO: spread this work across multiple workers?)
@@ -16,9 +15,6 @@
   - ensure filetype is set correctly
 - for each file in local but NOT in epic (add epic files to map in previous loop?)
   - mark for delete
-- improve logging of Exec/Bash from bs
-  - extract cmd logic into its own project?
-  - or change bs to be instance-based instead of global?
 - clean up naming - don't use epic/local, instead use source/target? src/dst? read/write? something like that
 
 ## Setup local dev environment
