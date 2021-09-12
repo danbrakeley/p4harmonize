@@ -28,37 +28,15 @@ Note: `p4harmonize` assumes you have bash locally (on Windows, just install Git 
 
 ## Build/run
 
-Once all dependancies are installed, open a fresh bash shell and cd into the root folder for p4harmonize (going into subfolders will cause `mage` to fail with `No .go files marked with the mage build tag in this directory.`).
-
-Running `mage` with no arguments will list all available targets:
+`p4harmonzie` uses [Mage](https://magefile.org), which is a build tool that runs Go code. The setup script from the previous step installs mage (in your `$GOPATH/bin` folder), so you should be able run `mage` to see what targets are available:
 
 ```text
 $ mage
 Targets:
-  build    Builds named cmd (output goes to "local" folder).
-  clean    Removes all artifacts from previous builds.
-  run      Builds and runs named cmd.
+  build    tests and builds the app (output goes to "local" folder)
+  run      tests, builds, and runs the app
 ```
 
-You can add/remove/modify targets by adding/removing/modifying the functions in `magefile.go`.
+If you see `No .go files marked with the mage build tag in this directory.`, make sure you are in the root folder when running mage (mage does not currently look to parent folders for mage files).
 
-Some targets take arguments, for example:
-
-```text
-$ mage build
-not enough arguments for target "Build", expected 1, got 0
-
-$ mage build p4harmonize
-Building p4harmonize.exe...
-```
-
-Each buildable app has its own subfolder in the `cmd` folder, so you can just `ls cmd` to list all the buildable targets:
-
-```text
-$ ls cmd
-p4harmonize/  functests/
-```
-
-In the above case, you have two buildable targets: `mage build p4harmonize` and `mage build functests`.
-
-The build command puts the executable in the `local` folder, and the run command cds into local, then runs the exe.
+The `build` and `run` targets will put the `p4harmonzie.exe` file in a subfolder named `local`, which is ignored by git. If you create a `config.toml` file in this folder, it will also be ignored by git.

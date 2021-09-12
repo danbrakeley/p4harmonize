@@ -8,9 +8,10 @@ import (
 )
 
 var sh = &bsh.Bsh{}
+var cmd = "p4harmonize"
 
-// Builds named cmd (output goes to "local" folder).
-func Build(cmd string) {
+// Build tests and builds the app (output goes to "local" folder)
+func Build() {
 	target := sh.ExeName(cmd)
 
 	sh.Echo("Running unit tests...")
@@ -21,16 +22,9 @@ func Build(cmd string) {
 	sh.Cmdf("go build -o local/%s ./cmd/%s", target, cmd).Run()
 }
 
-// Removes all artifacts from previous builds.
-// At the moment, this is accomplished by deleting the "local" folder.
-func Clean() {
-	sh.Echo("Deleting local...")
-	sh.RemoveAll("local")
-}
-
-// Builds and runs named cmd.
-func Run(cmd string) {
-	mg.Deps(mg.F(Build, cmd))
+// Run tests, builds, and runs the app
+func Run() {
+	mg.Deps(Build)
 
 	target := sh.ExeName(cmd)
 
