@@ -13,7 +13,6 @@ var (
 )
 
 func main() {
-	// create a logger and a bsh instance that uses it
 	log := MakeLogger(frog.New(frog.Auto, frog.HideLevel, frog.MessageOnRight, frog.FieldIndent10), "")
 
 	cfg, err := loadConfigFromFirstFile(configFileNames)

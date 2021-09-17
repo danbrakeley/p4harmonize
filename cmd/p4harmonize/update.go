@@ -12,6 +12,7 @@ func UpdateLocalToMatchEpic(log Logger, cfg Config) error {
 	var err error
 
 	// Ensure local folder and local client don't already exist
+
 	if err = PreFlightChecks(log, cfg); err != nil {
 		return err
 	}
@@ -63,7 +64,7 @@ func UpdateLocalToMatchEpic(log Logger, cfg Config) error {
 
 	log.Info("Downloading list of files for %s on %s...", local.Client, local.DisplayName())
 
-	localFiles, err := local.DepotFiles()
+	localFiles, err := local.ListDepotFiles()
 	if err != nil {
 		return fmt.Errorf(`failed to list files from %s: %w`, local.DisplayName(), err)
 	}
@@ -87,7 +88,7 @@ func PreFlightChecks(log Logger, cfg Config) error {
 			"Please delete it, or change local.new_client_root in your config file, then try again.", cfg.Local.ClientRoot)
 	}
 
-	clients, err := local.Clients()
+	clients, err := local.ListClients()
 	if err != nil {
 		return fmt.Errorf("Failed to get clients from %s: %w", cfg.Local.P4Port, err)
 	}
@@ -124,7 +125,7 @@ func EpicSyncAndList(log Logger, cfg Config, epicFiles *[]p4.DepotFile) error {
 
 	log.Info("Downloading list of files for %s on %s...", epic.Client, epic.DisplayName())
 
-	files, err := epic.DepotFiles()
+	files, err := epic.ListDepotFiles()
 	if err != nil {
 		return fmt.Errorf(`failed to list files from %s: %w`, epic.DisplayName(), err)
 	}
@@ -134,10 +135,11 @@ func EpicSyncAndList(log Logger, cfg Config, epicFiles *[]p4.DepotFile) error {
 }
 
 func MakeLoggingBsh(log Logger) *bsh.Bsh {
+	w := LogVerboseWriter(log)
 	sh := &bsh.Bsh{
 		Stdin:        os.Stdin,
-		Stdout:       LogVerboseWriter(log),
-		Stderr:       LogWarningWriter(log),
+		Stdout:       w,
+		Stderr:       w,
 		DisableColor: true,
 	}
 	sh.SetVerboseEnvVarName("VERBOSE")
