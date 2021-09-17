@@ -8,6 +8,12 @@ import (
 	"github.com/proletariatgames/p4harmonize/internal/p4"
 )
 
+type epicData struct {
+	Error      error
+	ClientRoot string
+	Files      []p4.DepotFile
+}
+
 func UpdateLocalToMatchEpic(log Logger, cfg Config) error {
 	var err error
 
@@ -19,12 +25,11 @@ func UpdateLocalToMatchEpic(log Logger, cfg Config) error {
 
 	// Start Epic sync in the background
 
-	var epicFiles []p4.DepotFile
 	logEpic := log.MakeChildLogger("epic")
-	chEpic := make(chan error)
+	chEpic := make(chan epicData)
 	go func() {
 		defer close(chEpic)
-		chEpic <- EpicSyncAndList(logEpic, cfg, &epicFiles)
+		chEpic <- epicSyncAndList(logEpic, cfg)
 	}()
 
 	// Create local client
@@ -54,11 +59,12 @@ func UpdateLocalToMatchEpic(log Logger, cfg Config) error {
 	// TODO: copy files from EPIC ROOT (ask epic client for the root?) to here
 
 	// block until Epic sync completes
-	err = <-chEpic
-	if err != nil {
-		return fmt.Errorf("Failed in Epic thread: %w", err)
+	ed := <-chEpic
+	if ed.Error != nil {
+		return fmt.Errorf("Failed in Epic thread: %w", ed.Error)
 	}
-	log.Warning(fmt.Sprintf("EPIC FILES: %v", epicFiles))
+	log.Warning(fmt.Sprintf("EPIC ROOT: %v", ed.ClientRoot))
+	log.Warning(fmt.Sprintf("EPIC FILES: %v", ed.Files))
 
 	// Grab the full list from our local server
 
@@ -110,28 +116,38 @@ func PreFlightChecks(log Logger, cfg Config) error {
 	return nil
 }
 
-// EpicSyncAndList connects to the Epic perforce server, syncs to head, then
+// epicSyncAndList connects to the Epic perforce server, syncs to head, then
 // requests a list of all file names and types.
-func EpicSyncAndList(log Logger, cfg Config, epicFiles *[]p4.DepotFile) error {
+func epicSyncAndList(log Logger, cfg Config) epicData {
 	sh := MakeLoggingBsh(log)
 	epic := p4.New(sh, cfg.Epic.P4Port, cfg.Epic.P4User, cfg.Epic.P4Client)
 
+	spec, err := epic.GetClientSpec()
+	if err != nil {
+		return epicData{Error: err}
+	}
+	root, exists := spec["Root"]
+	if !exists {
+		return epicData{Error: fmt.Errorf(`missing field "Root" in client spec "%s"`, epic.Client)}
+	}
+
 	log.Info("Getting latest from %s...", epic.DisplayName())
 
-	err := epic.SyncLatest()
-	if err != nil {
-		return err
+	if err := epic.SyncLatest(); err != nil {
+		return epicData{Error: err}
 	}
 
 	log.Info("Downloading list of files for %s on %s...", epic.Client, epic.DisplayName())
 
 	files, err := epic.ListDepotFiles()
 	if err != nil {
-		return fmt.Errorf(`failed to list files from %s: %w`, epic.DisplayName(), err)
+		return epicData{Error: fmt.Errorf(`failed to list files from %s: %w`, epic.DisplayName(), err)}
 	}
 
-	*epicFiles = files
-	return nil
+	return epicData{
+		ClientRoot: root,
+		Files:      files,
+	}
 }
 
 func MakeLoggingBsh(log Logger) *bsh.Bsh {

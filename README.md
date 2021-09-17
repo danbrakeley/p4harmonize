@@ -2,7 +2,6 @@
 
 ## TODO:
 
-- get epic client's root folder
 - ensure epic root folder exists
 - for each file in the epic file list (TODO: spread this work across multiple workers?)
   - if file is in local
