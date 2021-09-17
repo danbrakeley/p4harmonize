@@ -8,143 +8,151 @@ import (
 	"github.com/proletariatgames/p4harmonize/internal/p4"
 )
 
-type epicData struct {
+type srcThreadResults struct {
 	Error      error
 	ClientRoot string
 	Files      []p4.DepotFile
 }
 
-func UpdateLocalToMatchEpic(log Logger, cfg Config) error {
+func Harmonize(log Logger, cfg Config) error {
 	var err error
 
-	// Ensure local folder and local client don't already exist
+	// Ensure dst root folder and dst client don't already exist
 
-	if err = PreFlightChecks(log, cfg); err != nil {
+	if err = preFlightChecks(log, cfg); err != nil {
 		return err
 	}
 
-	// Start Epic sync in the background
+	// Start sync from src in the background
 
-	logEpic := log.MakeChildLogger("epic")
-	chEpic := make(chan epicData)
+	logSrc := log.MakeChildLogger("source")
+	chSrc := make(chan srcThreadResults)
 	go func() {
-		defer close(chEpic)
-		chEpic <- epicSyncAndList(logEpic, cfg)
+		defer close(chSrc)
+		chSrc <- srcSyncAndList(logSrc, cfg)
 	}()
 
-	// Create local client
+	// Create dst client
 
 	sh := MakeLoggingBsh(log)
-	local := p4.New(sh, cfg.Local.P4Port, cfg.Local.P4User, "")
+	p4dst := p4.New(sh, cfg.Dst.P4Port, cfg.Dst.P4User, "")
 
-	log.Info("Creating client %s on %s...", cfg.Local.ClientName, local.DisplayName())
+	log.Info("Creating client %s on %s...", cfg.Dst.ClientName, p4dst.DisplayName())
 
-	err = local.CreateClient(cfg.Local.ClientName, cfg.Local.ClientRoot, cfg.Local.ClientStream)
+	err = p4dst.CreateClient(cfg.Dst.ClientName, cfg.Dst.ClientRoot, cfg.Dst.ClientStream)
 	if err != nil {
-		return fmt.Errorf(`Failed to create client %s: %w`, local.Client, err)
+		return fmt.Errorf(`Failed to create client %s: %w`, p4dst.Client, err)
 	}
-	// rebuild the local P4 to include the new client and stream
-	local = p4.New(sh, cfg.Local.P4Port, cfg.Local.P4User, cfg.Local.ClientName)
-	local.SetStreamName(cfg.Local.ClientStream)
+	// rebuild p4dst to include the new client and stream
+	p4dst = p4.New(sh, cfg.Dst.P4Port, cfg.Dst.P4User, cfg.Dst.ClientName)
+	err = p4dst.SetStreamName(cfg.Dst.ClientStream)
+	if err != nil {
+		return err
+	}
 
 	// Force perforce to think you have synced everything already
 
-	log.Info("Slamming %s to head without transferring any files...", cfg.Local.ClientName)
+	log.Info("Slamming %s to head without transferring any files...", cfg.Dst.ClientName)
 
-	err = local.SyncLatestNoDownload()
+	err = p4dst.SyncLatestNoDownload()
 	if err != nil {
 		return err
 	}
 
-	// TODO: copy files from EPIC ROOT (ask epic client for the root?) to here
+	// Grab the full list of files
 
-	// block until Epic sync completes
-	ed := <-chEpic
-	if ed.Error != nil {
-		return fmt.Errorf("Failed in Epic thread: %w", ed.Error)
-	}
-	log.Warning(fmt.Sprintf("EPIC ROOT: %v", ed.ClientRoot))
-	log.Warning(fmt.Sprintf("EPIC FILES: %v", ed.Files))
+	log.Info("Downloading list of current depot files in destination...")
 
-	// Grab the full list from our local server
-
-	log.Info("Downloading list of files for %s on %s...", local.Client, local.DisplayName())
-
-	localFiles, err := local.ListDepotFiles()
+	dstFiles, err := p4dst.ListDepotFiles()
 	if err != nil {
-		return fmt.Errorf(`failed to list files from %s: %w`, local.DisplayName(), err)
+		return fmt.Errorf(`failed to list destination files: %w`, err)
 	}
 
-	log.Warning(fmt.Sprintf("LOCAL FILES: %v", localFiles))
+	log.Warning(fmt.Sprintf("P4DST DEPOT FILES: %v", dstFiles))
+
+	// block until sync source sync completes
+	str := <-chSrc
+	if str.Error != nil {
+		return fmt.Errorf("Failed in source thread: %w", str.Error)
+	}
+
+	log.Info("Reconciling file lists from source and destination...")
+
+	if !sh.IsDir(str.ClientRoot) {
+		return fmt.Errorf("client root %s is missing or is not a folder", str.ClientRoot)
+	}
+
+	log.Warning(fmt.Sprintf("SRC ROOT: %v", str.ClientRoot))
+	log.Warning(fmt.Sprintf("SRC FILES: %v", str.Files))
 
 	return nil
 }
 
-// PreFlightChecks performs quick checks to ensure we're in a good state, before
-// involving the Epic perforce server (which can be slow to respond), and before
+// preFlightChecks performs quick checks to ensure we're in a good state, before
 // doing any action that might take a while to complete.
-func PreFlightChecks(log Logger, cfg Config) error {
+func preFlightChecks(log Logger, cfg Config) error {
 	sh := MakeLoggingBsh(log)
-	local := p4.New(sh, cfg.Local.P4Port, cfg.Local.P4User, "")
+	p4dst := p4.New(sh, cfg.Dst.P4Port, cfg.Dst.P4User, "")
 
-	log.Info("Checking folders and clients for %s...", local.DisplayName())
+	log.Info("Checking folders and clients for %s...", p4dst.DisplayName())
 
-	if sh.Exists(cfg.Local.ClientRoot) {
-		return fmt.Errorf("Local client root %s already exists. "+
-			"Please delete it, or change local.new_client_root in your config file, then try again.", cfg.Local.ClientRoot)
+	if sh.Exists(cfg.Dst.ClientRoot) {
+		return fmt.Errorf("Destination client root %s already exists. "+
+			"Please delete it, or change destination.new_client_root in your config file, then try again.",
+			cfg.Dst.ClientRoot)
 	}
 
-	clients, err := local.ListClients()
+	clients, err := p4dst.ListClients()
 	if err != nil {
-		return fmt.Errorf("Failed to get clients from %s: %w", cfg.Local.P4Port, err)
+		return fmt.Errorf("Failed to get clients from %s: %w", cfg.Dst.P4Port, err)
 	}
 
 	hasClient := false
 	for _, client := range clients {
-		if client == cfg.Local.ClientName {
+		if client == cfg.Dst.ClientName {
 			hasClient = true
 			break
 		}
 	}
 
 	if hasClient {
-		return fmt.Errorf("Local client %s already exists on %s. "+
-			"Please delete it, or change local.new_client_name in your config file, then try again.",
-			cfg.Local.ClientName, cfg.Local.P4Port)
+		return fmt.Errorf("Destination client %s already exists on %s. "+
+			"Please delete it, or change destination.new_client_name in your config file, then try again.",
+			cfg.Dst.ClientName, cfg.Dst.P4Port)
 	}
 
 	return nil
 }
 
-// epicSyncAndList connects to the Epic perforce server, syncs to head, then
+// srcSyncAndList connects to the source perforce server, syncs to head, then
 // requests a list of all file names and types.
-func epicSyncAndList(log Logger, cfg Config) epicData {
+func srcSyncAndList(log Logger, cfg Config) srcThreadResults {
 	sh := MakeLoggingBsh(log)
-	epic := p4.New(sh, cfg.Epic.P4Port, cfg.Epic.P4User, cfg.Epic.P4Client)
+	p4src := p4.New(sh, cfg.Src.P4Port, cfg.Src.P4User, cfg.Src.P4Client)
 
-	spec, err := epic.GetClientSpec()
+	spec, err := p4src.GetClientSpec()
 	if err != nil {
-		return epicData{Error: err}
+		return srcThreadResults{Error: err}
 	}
 	root, exists := spec["Root"]
 	if !exists {
-		return epicData{Error: fmt.Errorf(`missing field "Root" in client spec "%s"`, epic.Client)}
+		return srcThreadResults{Error: fmt.Errorf(`missing field "Root" in client spec "%s"`, p4src.Client)}
 	}
 
-	log.Info("Getting latest from %s...", epic.DisplayName())
+	log.Info("Getting latest from %s...", p4src.DisplayName())
 
-	if err := epic.SyncLatest(); err != nil {
-		return epicData{Error: err}
+	if err := p4src.SyncLatest(); err != nil {
+		return srcThreadResults{Error: err}
 	}
 
-	log.Info("Downloading list of files for %s on %s...", epic.Client, epic.DisplayName())
+	log.Info("Downloading list of files for %s on %s...", p4src.Client, p4src.DisplayName())
 
-	files, err := epic.ListDepotFiles()
+	files, err := p4src.ListDepotFiles()
 	if err != nil {
-		return epicData{Error: fmt.Errorf(`failed to list files from %s: %w`, epic.DisplayName(), err)}
+		return srcThreadResults{Error: fmt.Errorf(`failed to list files from %s: %w`, p4src.DisplayName(), err)}
 	}
 
-	return epicData{
+	return srcThreadResults{
 		ClientRoot: root,
 		Files:      files,
 	}

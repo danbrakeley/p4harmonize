@@ -9,13 +9,13 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-type EpicConfig struct {
+type SourceConfig struct {
 	P4Port   string `toml:"p4port"`
 	P4User   string `toml:"p4user"`
 	P4Client string `toml:"p4client"`
 }
 
-type LocalConfig struct {
+type DestinationConfig struct {
 	P4Port       string `toml:"p4port"`
 	P4User       string `toml:"p4user"`
 	ClientName   string `toml:"new_client_name"`
@@ -24,8 +24,8 @@ type LocalConfig struct {
 }
 
 type Config struct {
-	Epic  EpicConfig  `toml:"epic"`
-	Local LocalConfig `toml:"local"`
+	Src SourceConfig      `toml:"source"`
+	Dst DestinationConfig `toml:"destination"`
 
 	// TODO: commit message strings?
 

@@ -2,21 +2,19 @@
 
 ## TODO:
 
-- ensure epic root folder exists
-- for each file in the epic file list (TODO: spread this work across multiple workers?)
-  - if file is in local
-    - if local casing doesn't match epic
+- for each file in the source file list (TODO: spread this work across multiple workers?)
+  - if file is in destination
+    - if destination casing doesn't match source
       - mark for rename (?)
     - else
       - mark for edit
-  - copy file from epic root to local client root (which we just created, so we know it starts empty)
-  - if file wasn't in local CL, mark for add (use epic casing)
+  - copy file from source root to destination client root (which we just created, so we know it starts empty)
+  - if file wasn't in destination CL, mark for add (use source casing)
   - ensure filetype is set correctly
-- for each file in local but NOT in epic (add epic files to map in previous loop?)
+- for each file in destination but NOT in source (add source files to map in previous loop?)
   - mark for delete
-- clean up naming - don't use epic/local, instead use source/target? src/dst? read/write? something like that
 
-## Setup local dev environment
+## Setup destination dev environment
 
 Note: `p4harmonize` assumes you have bash locally (on Windows, just install Git for Windows, which includes git bash).
 

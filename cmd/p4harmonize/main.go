@@ -22,7 +22,7 @@ func main() {
 
 	log.Info("Config loaded from %s", cfg.Filename())
 
-	err = UpdateLocalToMatchEpic(log, cfg)
+	err = Harmonize(log, cfg)
 	if err != nil {
 		log.Fatal("%v", err)
 	}
