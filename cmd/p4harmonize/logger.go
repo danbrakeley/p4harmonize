@@ -9,6 +9,7 @@ import (
 )
 
 type Logger interface {
+	Close()
 	MakeChildLogger(id string) Logger
 	Info(format string, args ...interface{})
 	Verbose(format string, args ...interface{})
@@ -23,6 +24,10 @@ type FrogLog struct {
 func MakeLogger(l frog.Logger, id string) FrogLog {
 	l.SetMinLevel(frog.Verbose)
 	return FrogLog{Logger: l}
+}
+
+func (l FrogLog) Close() {
+	l.Logger.Close()
 }
 
 func (l FrogLog) MakeChildLogger(id string) Logger {
@@ -46,8 +51,8 @@ func (l FrogLog) Warning(format string, args ...interface{}) {
 	l.Logger.Warning(fmt.Sprintf(format, args...), l.Fields...)
 }
 
-func (l FrogLog) Fatal(format string, args ...interface{}) {
-	l.Logger.Fatal(fmt.Sprintf(format, args...), l.Fields...)
+func (l FrogLog) Error(format string, args ...interface{}) {
+	l.Logger.Error(fmt.Sprintf(format, args...), l.Fields...)
 }
 
 // create an io.Writer that treats each logged line as a call to log.Info

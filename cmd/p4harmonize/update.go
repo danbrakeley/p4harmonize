@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/danbrakeley/bsh"
 	"github.com/proletariatgames/p4harmonize/internal/p4"
@@ -82,8 +83,45 @@ func Harmonize(log Logger, cfg Config) error {
 		return fmt.Errorf("client root %s is missing or is not a folder", str.ClientRoot)
 	}
 
-	log.Warning(fmt.Sprintf("SRC ROOT: %v", str.ClientRoot))
-	log.Warning(fmt.Sprintf("SRC FILES: %v", str.Files))
+	diff := Reconcile(str.Files, dstFiles)
+
+	// early out if there's nothing to reconcile
+	if len(diff.NearMatch) == 0 && len(diff.SrcOnly) == 0 && len(diff.DstOnly) == 0 {
+		log.Info("All files in source and destination already match. Nothing more to do.")
+		return nil
+	}
+
+	log.Info("Creating changelist in destination...")
+
+	cl, err := p4dst.CreateChangelist("p4harmonize")
+	if err != nil {
+		return fmt.Errorf("unable to create new changelist: %v", err)
+	}
+
+	log.Info("Changelist %d created.", cl)
+
+	for _, pair := range diff.Match {
+		log.Warning("EDIT: %s", pair[0].Path)
+		// mark file in destination for edit
+		// copy file from source root to destination root
+	}
+
+	for _, pair := range diff.NearMatch {
+		if pair[0].Path != pair[1].Path {
+			log.Warning("RENAME: %s to %s", pair[0].Path, pair[1].Path)
+		}
+		if pair[0].Type != pair[1].Type {
+			log.Warning("CHANGE TYPE: %s to %s", pair[0].Path, pair[1].Path)
+		}
+	}
+
+	for _, src := range diff.SrcOnly {
+		log.Warning("ADD: %s", src.Path)
+	}
+
+	for _, dst := range diff.DstOnly {
+		log.Warning("DELETE: %s", dst.Path)
+	}
 
 	return nil
 }
@@ -169,4 +207,58 @@ func MakeLoggingBsh(log Logger) *bsh.Bsh {
 	sh.SetVerboseEnvVarName("VERBOSE")
 	sh.SetVerbose(true)
 	return sh
+}
+
+type DepotFileDiff struct {
+	Match     [][2]p4.DepotFile // Types and paths are an exact match
+	NearMatch [][2]p4.DepotFile // Types and/or path capitalization don't match
+	SrcOnly   []p4.DepotFile    // Path only exists in source
+	DstOnly   []p4.DepotFile    // Path only exists in destination
+}
+
+func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
+	max := len(src)
+	if len(dst) > max {
+		max = len(dst)
+	}
+
+	out := DepotFileDiff{
+		Match:     make([][2]p4.DepotFile, 0, max),
+		NearMatch: make([][2]p4.DepotFile, 0, max),
+		SrcOnly:   make([]p4.DepotFile, 0, max),
+		DstOnly:   make([]p4.DepotFile, 0, max),
+	}
+
+	is, id := 0, 0
+	for is < len(src) && id < len(dst) {
+		srcCmp := strings.ToLower(src[is].Path)
+		dstCmp := strings.ToLower(dst[id].Path)
+		cmp := strings.Compare(srcCmp, dstCmp)
+		switch {
+		case cmp == 0:
+			if src[is].Path == dst[id].Path && src[is].Type == dst[id].Type {
+				out.Match = append(out.Match, [2]p4.DepotFile{src[is], dst[id]})
+			} else {
+				out.NearMatch = append(out.NearMatch, [2]p4.DepotFile{src[is], dst[id]})
+			}
+			is++
+			id++
+		case cmp < 0:
+			out.SrcOnly = append(out.SrcOnly, src[is])
+			is++
+		case cmp > 0:
+			out.DstOnly = append(out.DstOnly, dst[id])
+			id++
+		}
+	}
+
+	for i := is; i < len(src); i++ {
+		out.SrcOnly = append(out.SrcOnly, src[i])
+	}
+
+	for i := id; i < len(dst); i++ {
+		out.DstOnly = append(out.DstOnly, dst[i])
+	}
+
+	return out
 }

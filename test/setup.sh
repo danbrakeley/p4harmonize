@@ -9,7 +9,7 @@ fi
 SRC_PORT=1667
 SRC_USER=super
 SRC_DEPOT=UE4
-SRC_STREAM=Release-4.69
+SRC_STREAM=Release-4.20
 SRC_CLIENT=$SRC_USER-$SRC_DEPOT-$SRC_STREAM
 SRC_ROOT=../local/p4/src
 SRC_ROOT_WIN=$(cygpath -a -w $SRC_ROOT | sed -e 's|\\|/|g')
