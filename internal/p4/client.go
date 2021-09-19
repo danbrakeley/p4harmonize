@@ -13,11 +13,11 @@ var reClientName = regexp.MustCompile("^[a-zA-Z0-9_-]+$")
 // CreateClient creates a new client with the given parameters
 func (p *P4) CreateClient(clientname string, root string, stream string) error {
 	if !reClientName.MatchString(clientname) {
-		return fmt.Errorf(`invalid client name "%s"`, clientname)
+		return fmt.Errorf("invalid client name: %s", clientname)
 	}
 	absoluteRoot, err := filepath.Abs(root)
 	if err != nil {
-		return fmt.Errorf(`failed to get absolute path for "%s": %w`, root, err)
+		return fmt.Errorf("failed to get absolute path for '%s': %w", root, err)
 	}
 	bashCmd := fmt.Sprintf(
 		`%s --field "Root=%s" --field "Stream=%s" --field "View=%s/... //%s/..." client -o %s | %s client -i`,
@@ -25,7 +25,16 @@ func (p *P4) CreateClient(clientname string, root string, stream string) error {
 	)
 	err = p.sh.Cmd(bashCmd).BashErr()
 	if err != nil {
-		return fmt.Errorf(`error creating client "%s": %w`, p.Client, err)
+		return fmt.Errorf("error creating client %s: %w", clientname, err)
+	}
+	return nil
+}
+
+// DeleteClient deletes an existing client spec that has no changelists or open files
+func (p *P4) DeleteClient(clientname string) error {
+	err := p.sh.Cmdf("%s client -d %s", p.cmd(), clientname).RunErr()
+	if err != nil {
+		return fmt.Errorf("error deleting client '%s': %w", p.Client, err)
 	}
 	return nil
 }
@@ -36,7 +45,7 @@ func (p *P4) GetClientSpec() (map[string]string, error) {
 	sb.Grow(1024)
 	err := p.sh.Cmdf(`%s -z tag client -o`, p.cmd()).Out(&sb).RunErr()
 	if err != nil {
-		return nil, fmt.Errorf(`error getting client workspace "%s": %w`, p.Client, err)
+		return nil, fmt.Errorf("error getting client %s: %w", p.Client, err)
 	}
 	return ParseSpec(sb.String()), nil
 }

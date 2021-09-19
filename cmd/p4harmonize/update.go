@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/danbrakeley/bsh"
@@ -42,7 +44,7 @@ func Harmonize(log Logger, cfg Config) error {
 
 	err = p4dst.CreateClient(cfg.Dst.ClientName, cfg.Dst.ClientRoot, cfg.Dst.ClientStream)
 	if err != nil {
-		return fmt.Errorf(`Failed to create client %s: %w`, p4dst.Client, err)
+		return fmt.Errorf("Failed to create client %s: %w", p4dst.Client, err)
 	}
 	// rebuild p4dst to include the new client and stream
 	p4dst = p4.New(sh, cfg.Dst.P4Port, cfg.Dst.P4User, cfg.Dst.ClientName)
@@ -66,10 +68,8 @@ func Harmonize(log Logger, cfg Config) error {
 
 	dstFiles, err := p4dst.ListDepotFiles()
 	if err != nil {
-		return fmt.Errorf(`failed to list destination files: %w`, err)
+		return fmt.Errorf("Failed to list destination files: %w", err)
 	}
-
-	log.Warning(fmt.Sprintf("P4DST DEPOT FILES: %v", dstFiles))
 
 	// block until sync source sync completes
 	str := <-chSrc
@@ -80,14 +80,19 @@ func Harmonize(log Logger, cfg Config) error {
 	log.Info("Reconciling file lists from source and destination...")
 
 	if !sh.IsDir(str.ClientRoot) {
-		return fmt.Errorf("client root %s is missing or is not a folder", str.ClientRoot)
+		return fmt.Errorf("Client root '%s' is missing or is not a folder", str.ClientRoot)
 	}
 
 	diff := Reconcile(str.Files, dstFiles)
 
 	// early out if there's nothing to reconcile
-	if len(diff.NearMatch) == 0 && len(diff.SrcOnly) == 0 && len(diff.DstOnly) == 0 {
-		log.Info("All files in source and destination already match. Nothing more to do.")
+	if !diff.HasDifference {
+		log.Info("All files in source and destination already match, so no harmonizing necessary.")
+		log.Info("Removing unused client...")
+		err := p4dst.DeleteClient(p4dst.Client)
+		if err != nil {
+			return fmt.Errorf("Error deleting client %s: %w", p4dst.Client, err)
+		}
 		return nil
 	}
 
@@ -95,33 +100,70 @@ func Harmonize(log Logger, cfg Config) error {
 
 	cl, err := p4dst.CreateChangelist("p4harmonize")
 	if err != nil {
-		return fmt.Errorf("unable to create new changelist: %v", err)
+		return fmt.Errorf("Unable to create new changelist: %v", err)
 	}
 
 	log.Info("Changelist %d created.", cl)
 
+	dstClientRoot, err := filepath.Abs(cfg.Dst.ClientRoot)
+	if err != nil {
+		return fmt.Errorf("Unable to get absolute path for '%s': %w", cfg.Dst.ClientRoot, err)
+	}
+
+	// For each file with the capitalization or the types different, copy the file, then make
+	// sure perforce is set to fix the mismatch(es).
 	for _, pair := range diff.Match {
-		log.Warning("EDIT: %s", pair[0].Path)
-		// mark file in destination for edit
+		srcPath := filepath.Join(str.ClientRoot, pair[0].Path)
+		dstPathOld := filepath.Join(dstClientRoot, pair[1].Path)
+		dstPathNew := filepath.Join(dstClientRoot, pair[0].Path)
+
 		// copy file from source root to destination root
+		if err := SmartCopy(srcPath, dstPathOld); err != nil {
+			return err
+		}
+
+		// mark file in destination for edit with type
+		if err := p4dst.Edit(dstPathOld, p4.Changelist(cl), p4.Type(pair[0].Type)); err != nil {
+			return fmt.Errorf("Unable to open '%s' for edit: %w", dstPathOld, err)
+		}
+
+		if dstPathOld != dstPathNew {
+			// mark file in destination for move
+			if err := p4dst.Move(dstPathOld, dstPathNew, p4.Changelist(cl), p4.Type(pair[0].Type)); err != nil {
+				return fmt.Errorf("Unable to open '%s' for move to '%s': %w", dstPathOld, dstPathNew, err)
+			}
+		}
 	}
 
-	for _, pair := range diff.NearMatch {
-		if pair[0].Path != pair[1].Path {
-			log.Warning("RENAME: %s to %s", pair[0].Path, pair[1].Path)
-		}
-		if pair[0].Type != pair[1].Type {
-			log.Warning("CHANGE TYPE: %s to %s", pair[0].Path, pair[1].Path)
-		}
-	}
-
+	// For each file that only exists in the source, copy it over then add it to the destination.
 	for _, src := range diff.SrcOnly {
-		log.Warning("ADD: %s", src.Path)
+		srcPath := filepath.Join(str.ClientRoot, src.Path)
+		dstPath := filepath.Join(dstClientRoot, src.Path)
+
+		// copy file from source root to destination root
+		if err := SmartCopy(srcPath, dstPath); err != nil {
+			return err
+		}
+
+		// add to the depot
+		if err := p4dst.Add(dstPath, p4.Changelist(cl), p4.Type(src.Type)); err != nil {
+			return fmt.Errorf("Unable to open '%s' for add: %w", dstPath, err)
+		}
 	}
 
+	// For each file that only exists in the destination, mark it for delete in the destination.
 	for _, dst := range diff.DstOnly {
-		log.Warning("DELETE: %s", dst.Path)
+		dstPath := filepath.Join(dstClientRoot, dst.Path)
+		if err := p4dst.Delete(dstPath, p4.Changelist(cl)); err != nil {
+			return fmt.Errorf("Unable to mark '%s' for delete: %w", dstPath, err)
+		}
 	}
+
+	if err := p4dst.RevertUnchanged(filepath.Join(dstClientRoot, "..."), p4.Changelist(cl)); err != nil {
+		return fmt.Errorf("Unable to revert unchanged files in the destination: %w", err)
+	}
+
+	log.Warning("Success! All changes are waiting in CL #%d. Please review and submit when ready.", cl)
 
 	return nil
 }
@@ -130,12 +172,29 @@ func Harmonize(log Logger, cfg Config) error {
 // doing any action that might take a while to complete.
 func preFlightChecks(log Logger, cfg Config) error {
 	sh := MakeLoggingBsh(log)
+
+	log.Info("Checking login ticket status...")
+
+	p4src := p4.New(sh, cfg.Src.P4Port, cfg.Src.P4User, "")
+
+	if needsLogin, err := p4src.NeedsLogin(); err != nil {
+		return fmt.Errorf("Error checking login status on %s: %w", p4src.Port, err)
+	} else if needsLogin {
+		return fmt.Errorf("Not logged in. Please run 'p4 -p %s -u %s login' and then try again.", p4src.Port, p4src.User)
+	}
+
 	p4dst := p4.New(sh, cfg.Dst.P4Port, cfg.Dst.P4User, "")
 
-	log.Info("Checking folders and clients for %s...", p4dst.DisplayName())
+	if needsLogin, err := p4dst.NeedsLogin(); err != nil {
+		return fmt.Errorf("Error checking login status on %s: %w", p4dst.Port, err)
+	} else if needsLogin {
+		return fmt.Errorf("Not logged in. Please run 'p4 -p %s -u %s login' and then try again.", p4dst.Port, p4dst.User)
+	}
+
+	log.Info("Checking if destination folder or client already exist...")
 
 	if sh.Exists(cfg.Dst.ClientRoot) {
-		return fmt.Errorf("Destination client root %s already exists. "+
+		return fmt.Errorf("Destination client root '%s' already exists. "+
 			"Please delete it, or change destination.new_client_root in your config file, then try again.",
 			cfg.Dst.ClientRoot)
 	}
@@ -174,20 +233,20 @@ func srcSyncAndList(log Logger, cfg Config) srcThreadResults {
 	}
 	root, exists := spec["Root"]
 	if !exists {
-		return srcThreadResults{Error: fmt.Errorf(`missing field "Root" in client spec "%s"`, p4src.Client)}
+		return srcThreadResults{Error: fmt.Errorf("Missing field Root in client spec %s", p4src.Client)}
 	}
 
-	log.Info("Getting latest from %s...", p4src.DisplayName())
+	log.Info("Getting latest from source...")
 
 	if err := p4src.SyncLatest(); err != nil {
 		return srcThreadResults{Error: err}
 	}
 
-	log.Info("Downloading list of files for %s on %s...", p4src.Client, p4src.DisplayName())
+	log.Info("Downloading list of files with types from source...")
 
 	files, err := p4src.ListDepotFiles()
 	if err != nil {
-		return srcThreadResults{Error: fmt.Errorf(`failed to list files from %s: %w`, p4src.DisplayName(), err)}
+		return srcThreadResults{Error: fmt.Errorf("Failed to list files from source: %w", err)}
 	}
 
 	return srcThreadResults{
@@ -210,10 +269,10 @@ func MakeLoggingBsh(log Logger) *bsh.Bsh {
 }
 
 type DepotFileDiff struct {
-	Match     [][2]p4.DepotFile // Types and paths are an exact match
-	NearMatch [][2]p4.DepotFile // Types and/or path capitalization don't match
-	SrcOnly   []p4.DepotFile    // Path only exists in source
-	DstOnly   []p4.DepotFile    // Path only exists in destination
+	HasDifference bool
+	Match         [][2]p4.DepotFile // Types and paths are an exact match
+	SrcOnly       []p4.DepotFile    // Path only exists in source
+	DstOnly       []p4.DepotFile    // Path only exists in destination
 }
 
 func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
@@ -223,10 +282,9 @@ func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
 	}
 
 	out := DepotFileDiff{
-		Match:     make([][2]p4.DepotFile, 0, max),
-		NearMatch: make([][2]p4.DepotFile, 0, max),
-		SrcOnly:   make([]p4.DepotFile, 0, max),
-		DstOnly:   make([]p4.DepotFile, 0, max),
+		Match:   make([][2]p4.DepotFile, 0, max),
+		SrcOnly: make([]p4.DepotFile, 0, max),
+		DstOnly: make([]p4.DepotFile, 0, max),
 	}
 
 	is, id := 0, 0
@@ -236,18 +294,19 @@ func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
 		cmp := strings.Compare(srcCmp, dstCmp)
 		switch {
 		case cmp == 0:
-			if src[is].Path == dst[id].Path && src[is].Type == dst[id].Type {
-				out.Match = append(out.Match, [2]p4.DepotFile{src[is], dst[id]})
-			} else {
-				out.NearMatch = append(out.NearMatch, [2]p4.DepotFile{src[is], dst[id]})
+			out.Match = append(out.Match, [2]p4.DepotFile{src[is], dst[id]})
+			if src[is].Path != dst[id].Path || src[is].Type != dst[id].Type {
+				out.HasDifference = true
 			}
 			is++
 			id++
 		case cmp < 0:
 			out.SrcOnly = append(out.SrcOnly, src[is])
+			out.HasDifference = true
 			is++
 		case cmp > 0:
 			out.DstOnly = append(out.DstOnly, dst[id])
+			out.HasDifference = true
 			id++
 		}
 	}
@@ -261,4 +320,42 @@ func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
 	}
 
 	return out
+}
+
+// SmartCopy copies file "src" to file/path "dst", creating any missing directories needed by "dst".
+func SmartCopy(src, dst string) error {
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("Unable to stat '%s': %w", src, err)
+	}
+
+	if !srcInfo.Mode().IsRegular() {
+		return fmt.Errorf("'%s' is not a regular file", src)
+	}
+	srcSize := srcInfo.Size()
+
+	dstDir := filepath.Dir(dst)
+	if err := os.MkdirAll(dstDir, os.ModePerm); err != nil {
+		return fmt.Errorf("Unable to mkdir '%s': %w", dstDir, err)
+	}
+
+	s, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("Unable to open '%s': %w", src, err)
+	}
+	defer s.Close()
+
+	d, err := os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("Unable to create '%s': %w", dst, err)
+	}
+	defer d.Close()
+	n, err := io.Copy(d, s)
+	if err != nil {
+		return fmt.Errorf("Unable to copy '%s' to '%s': %w", src, dst, err)
+	}
+	if n != srcSize {
+		return fmt.Errorf("Expected '%s' to copy %d bytes to '%s', but only %d were copied", src, n, dst, srcSize)
+	}
+	return nil
 }

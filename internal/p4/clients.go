@@ -16,7 +16,7 @@ func (p *P4) ListClients() ([]string, error) {
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf(`error listing clients: %w`, err)
+		return nil, fmt.Errorf("error listing clients: %w", err)
 	}
 	return out, nil
 }

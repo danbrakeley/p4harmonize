@@ -25,21 +25,9 @@ DST_ROOT_WIN=$(cygpath -a -w $DST_ROOT | sed -e 's|\\|/|g')
 SRC_P4="p4 -p $SRC_PORT -u $SRC_USER"
 DST_P4="p4 -p $DST_PORT -u $DST_USER"
 
-if [[ "$1" == "clean" ]]; then
-  $DST_P4 -c $DST_CLIENT obliterate -y //$DST_DEPOT/$DST_STREAM/...
-  $DST_P4 client -d $DST_CLIENT
-  $DST_P4 stream -d //$DST_DEPOT/$DST_STREAM
-  $DST_P4 depot -d $DST_DEPOT
-  $SRC_P4 -c $SRC_CLIENT obliterate -y //$SRC_DEPOT/$SRC_STREAM/...
-  $SRC_P4 client -d $SRC_CLIENT
-  $SRC_P4 stream -d //$SRC_DEPOT/$SRC_STREAM
-  $SRC_P4 depot -d $SRC_DEPOT
-  exit 0
-fi
-
 function add_file {
   # echo "add $3 with type $4 (using $1 with CL $2)"
-  echo "foo" > "$3"
+  echo "$5" > "$3"
   $1 add -c $2 -t $4 "$3"
 }
 
@@ -61,11 +49,13 @@ CL=$($SRC_P4 --field "Description=test" --field "Files=" change -o | $SRC_P4 cha
 echo "Created CL $CL"
 
 rm -rf "$SRC_ROOT"
-mkdir -p "$SRC_ROOT/Engine"
-add_file "$SRC_P4" $CL "$SRC_ROOT/generate.cmd" binary
-add_file "$SRC_P4" $CL "$SRC_ROOT/Engine/build.cs" text
-add_file "$SRC_P4" $CL "$SRC_ROOT/Engine/chair.uasset" binary+l
-add_file "$SRC_P4" $CL "$SRC_ROOT/Engine/door.uasset" binary+l
+mkdir -p "$SRC_ROOT/Engine/Linux"
+add_file "$SRC_P4" $CL "$SRC_ROOT/generate.cmd" "binary" "echo foo"
+add_file "$SRC_P4" $CL "$SRC_ROOT/Engine/build.cs" "text" "// build stuff"
+add_file "$SRC_P4" $CL "$SRC_ROOT/Engine/chair.uasset" "binary+l" "I'm a chair!"
+add_file "$SRC_P4" $CL "$SRC_ROOT/Engine/door.uasset" "binary+l" "I'm a door!"
+add_file "$SRC_P4" $CL "$SRC_ROOT/Engine/Linux/important.h" "text" "#include <frank.h>"
+add_file "$SRC_P4" $CL "$SRC_ROOT/Engine/Linux/boring.h" "text" "#include <greg.h>"
 
 $SRC_P4 submit -c $CL
 
@@ -87,11 +77,13 @@ CL=$($DST_P4 --field "Description=test" --field "Files=" change -o | $DST_P4 cha
 echo "Created CL $CL"
 
 rm -rf "$DST_ROOT"
-mkdir -p "$DST_ROOT/Engine"
-add_file "$DST_P4" $CL "$DST_ROOT/generate.cmd" text
-add_file "$DST_P4" $CL "$DST_ROOT/future.txt" utf8
-add_file "$DST_P4" $CL "$DST_ROOT/Engine/build.cs" text
-add_file "$DST_P4" $CL "$DST_ROOT/Engine/chair.uasset" binary
-add_file "$DST_P4" $CL "$DST_ROOT/Engine/rug.uasset" binary
+mkdir -p "$DST_ROOT/Engine/linux"
+add_file "$DST_P4" $CL "$DST_ROOT/generate.cmd" "text" "echo foo"
+add_file "$DST_P4" $CL "$DST_ROOT/deprecated.txt" "utf8" "this file will be deleted very soon"
+add_file "$DST_P4" $CL "$DST_ROOT/Engine/build.cs" "text" "// build stuff"
+add_file "$DST_P4" $CL "$DST_ROOT/Engine/chair.uasset" "binary" "I'm a chair!"
+add_file "$DST_P4" $CL "$DST_ROOT/Engine/rug.uasset" "binary" "I'm a rug!"
+add_file "$DST_P4" $CL "$DST_ROOT/Engine/linux/important.h" "utf8" "#include <frank.h>"
+add_file "$DST_P4" $CL "$DST_ROOT/Engine/linux/boring.h" "text" "#include <greg.h>"
 
 $DST_P4 submit -c $CL

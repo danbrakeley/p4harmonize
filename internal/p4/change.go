@@ -16,12 +16,12 @@ func (p *P4) CreateChangelist(description string) (int64, error) {
 	)
 	err := p.sh.Cmd(bashCmd).Out(&sb).BashErr()
 	if err != nil {
-		return 0, fmt.Errorf(`error creating client "%s": %w`, p.Client, err)
+		return 0, fmt.Errorf("error creating changelist: %w", err)
 	}
 	clRaw := strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(sb.String()), "Change "), " created.")
 	cl, err := strconv.ParseInt(clRaw, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf(`changelist was created, but unable to parse reponse "%s": %v`, clRaw, err)
+		return 0, fmt.Errorf("changelist was created, but unable to parse '%s': %v", clRaw, err)
 	}
 	return cl, nil
 }

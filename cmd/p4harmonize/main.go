@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"time"
 
@@ -27,6 +28,10 @@ func main() {
 }
 
 func mainExit() int {
+	var cfgPath string
+	flag.StringVar(&cfgPath, "config", "config.toml", "config file location")
+	flag.Parse()
+
 	start := time.Now()
 	log := MakeLogger(frog.New(frog.Auto, frog.HideLevel, frog.MessageOnRight, frog.FieldIndent10), "")
 	defer func() {
@@ -36,7 +41,7 @@ func mainExit() int {
 		log.Close()
 	}()
 
-	cfg, err := loadConfigFromFirstFile(configFileNames)
+	cfg, err := loadConfigFromFile(cfgPath)
 	if err != nil {
 		log.Error("Failed to load config: %v", err)
 		return 1
@@ -50,6 +55,5 @@ func mainExit() int {
 		return 2
 	}
 
-	log.Info("Success!")
 	return 0
 }

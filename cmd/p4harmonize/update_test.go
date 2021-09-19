@@ -10,19 +10,18 @@ import (
 
 func Test_Reconcile(t *testing.T) {
 	var cases = []struct {
-		Name      string
-		Src       string
-		Dst       string
-		Match     string
-		NearMatch string
-		SrcOnly   string
-		DstOnly   string
+		Name    string
+		Src     string
+		Dst     string
+		Match   string
+		SrcOnly string
+		DstOnly string
 	}{
-		{"simple match", "foo", "foo", "foo:foo", "", "", ""},
-		{"missing src", "", "foo", "", "", "", "foo"},
-		{"missing dst", "foo", "", "", "", "foo", ""},
-		{"complex match", "a,b,c,f", "b,c,d,f,g", "b:b,c:c,f:f", "", "a", "d,g"},
-		{"mismatched case", "a,b,c", "a,B,", "a:a", "b:B", "c", ""},
+		{"simple match", "foo", "foo", "foo:foo", "", ""},
+		{"missing src", "", "foo", "", "", "foo"},
+		{"missing dst", "foo", "", "", "foo", ""},
+		{"complex match", "a,b,c,f", "b,c,d,f,g", "b:b,c:c,f:f", "a", "d,g"},
+		{"mismatched case", "a,b,c", "a,B,", "a:a,b:B", "c", ""},
 	}
 
 	for _, tc := range cases {
@@ -52,17 +51,6 @@ func Test_Reconcile(t *testing.T) {
 			}
 			if tc.Match != actualMatch {
 				t.Errorf("expected %s, got %s", tc.Match, actualMatch)
-			}
-
-			var actualNearMatch string
-			if len(actual.NearMatch) > 0 {
-				for _, v := range actual.NearMatch {
-					actualNearMatch += fmt.Sprintf("%s:%s,", v[0].Path, v[1].Path)
-				}
-				actualNearMatch = actualNearMatch[:len(actualNearMatch)-1]
-			}
-			if tc.NearMatch != actualNearMatch {
-				t.Errorf("expected %s, got %s", tc.NearMatch, actualNearMatch)
 			}
 
 			var actualSrcOnly string

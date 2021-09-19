@@ -27,8 +27,6 @@ type Config struct {
 	Src SourceConfig      `toml:"source"`
 	Dst DestinationConfig `toml:"destination"`
 
-	// TODO: commit message strings?
-
 	// save the file from which this config was loaded, for logging purposes
 	filename string
 }
@@ -39,21 +37,10 @@ func (c *Config) Filename() string {
 
 // Load helpers
 
-func loadConfigFromFirstFile(paths []string) (Config, error) {
-	for _, path := range paths {
-		if _, err := os.Stat(path); err == nil {
-			return loadConfigFromFile(path)
-		} else if !os.IsNotExist(err) {
-			return Config{}, fmt.Errorf(`error determining if "%s" exists: %v`, path, err)
-		}
-	}
-	return Config{}, fmt.Errorf("%v not found", strings.Join(paths, " or "))
-}
-
 func loadConfigFromFile(path string) (Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return Config{}, fmt.Errorf(`error opening "%s": %w`, path, err)
+		return Config{}, fmt.Errorf("Error opening '%s': %w", path, err)
 	}
 	defer f.Close()
 	cfg, err := loadConfig(f)

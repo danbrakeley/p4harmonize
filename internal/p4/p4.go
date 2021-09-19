@@ -86,7 +86,7 @@ func streamDepth(stream string) (int, error) {
 		}
 	}
 	if count < 1 {
-		return 0, fmt.Errorf(`unable to get stream depth of "%s"`, stream)
+		return 0, fmt.Errorf("unable to get stream depth of '%s'", stream)
 	}
 	return count, nil
 }
@@ -154,7 +154,7 @@ func (x DepotFileCaseInsensitive) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
 // The results are then sorted by Path (case-insensitive) and returned.
 func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
 	if !strings.Contains(cmd, "-ztag") && !strings.Contains(cmd, "-z tag") {
-		return nil, fmt.Errorf(`missing "-z tag" in cmd: %s`, cmd)
+		return nil, fmt.Errorf("missing '-z tag' in cmd: %s", cmd)
 	}
 
 	_, streamDepth, err := p.StreamInfo()
@@ -182,14 +182,14 @@ func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
 			// otherwise, parse the fields
 			switch {
 			case len(line) < 5 || !strings.HasPrefix(line, "... "):
-				return fmt.Errorf(`expected "... <tag>", but got: %s`, line)
+				return fmt.Errorf("expected '... <tag>', but got: %s", line)
 			case strings.HasPrefix(line[4:], "depotFile"):
 				raw := strings.TrimSpace(line[14:])
 				if len(prefix) == 0 {
 					var err error
 					prefix, err = getDepotPrefix(raw, streamDepth)
 					if err != nil {
-						return fmt.Errorf(`error parsing depot prefix: %w`, err)
+						return fmt.Errorf("error parsing depot prefix: %w", err)
 					}
 				}
 				cur.Path = strings.TrimPrefix(raw, prefix)
@@ -205,7 +205,7 @@ func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf(`error listing files: %w`, err)
+		return nil, fmt.Errorf("error listing files: %w", err)
 	}
 
 	// sort in-place, alphabetical, ignoring case
@@ -218,7 +218,7 @@ func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
 // For example: ("//a/b/c/d:foo", 2) would return "//a/b/"
 func getDepotPrefix(line string, depth int) (string, error) {
 	if !strings.HasPrefix(line, "//") {
-		return "", fmt.Errorf(`line "%s" does not begin with "//"`, line)
+		return "", fmt.Errorf("line '%s' does not begin with '//'", line)
 	}
 	i := 2
 	for depth > 0 {

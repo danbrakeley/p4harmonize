@@ -30,10 +30,27 @@ func Run() {
 
 	sh.InDir("local", func() {
 		sh.Echo("Running...")
-		sh.Cmdf("%s", target).Env(
-			"VERBOSE=true",
-		).Run()
+		sh.Cmdf("%s", target).Run()
 	})
+}
+
+// Run unit tests, builds, and runs the app against the test servers
+func Test() {
+	mg.Deps(Build)
+
+	target := sh.ExeName(cmd)
+
+	sh.InDir("local", func() {
+		sh.Echo("Running...")
+		sh.Cmdf("%s -config ../test/config.toml", target).Run()
+	})
+}
+
+// TestPrep gets everything ready for a run against test servers, and can
+// be used to reset test servers after a test run.
+func TestPrep() {
+	mg.SerialDeps(TestDown, TestUp)
+	sh.RemoveAll("./local/p4/dst")
 }
 
 // TestUp brings up a test environment with two perforce servers, on ports 1667 and 1668, to act as the
@@ -42,8 +59,8 @@ func TestUp() {
 	sh.InDir("test", func() {
 		sh.Echo("Running docker compose...")
 		sh.Cmdf("docker compose up --detach --force-recreate --build").Run()
-		sh.Echo("Running setup.sh...")
-		sh.Cmdf("./setup.sh").Bash()
+		sh.Echo("Running prep.sh...")
+		sh.Cmdf("./prep.sh").Bash()
 	})
 }
 
