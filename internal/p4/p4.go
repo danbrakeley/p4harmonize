@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -228,4 +229,72 @@ func getDepotPrefix(line string, depth int) (string, error) {
 	}
 
 	return line[:i], nil
+}
+
+// Escaping reserved characters in file paths
+
+func EscapePath(path string) string {
+	size := len(path)
+	for _, r := range path {
+		switch r {
+		case '@', '#', '*', '%':
+			size += 2
+		}
+	}
+
+	var sb strings.Builder
+	sb.Grow(size)
+
+	for _, r := range path {
+		switch r {
+		case '@':
+			sb.WriteString("%40")
+		case '#':
+			sb.WriteString("%23")
+		case '*':
+			sb.WriteString("%2A")
+		case '%':
+			sb.WriteString("%25")
+		default:
+			sb.WriteRune(r)
+		}
+	}
+
+	return sb.String()
+}
+
+func UnescapePath(path string) (string, error) {
+	var sb strings.Builder
+	sb.Grow(len(path))
+	var escaped bool
+	var start int
+
+	for i, r := range path {
+		if escaped {
+			if i-start >= 2 {
+				c, err := strconv.ParseInt(path[start+1:i+1], 16, 64)
+				if err != nil {
+					return "", fmt.Errorf("error parsing perforce-style escape code '%s': %w", path[start:i+1], err)
+				}
+				sb.WriteRune(rune(c))
+				escaped = false
+			}
+
+			continue
+		}
+
+		if r == '%' {
+			escaped = true
+			start = i
+			continue
+		}
+
+		sb.WriteRune(r)
+	}
+
+	if escaped {
+		return "", fmt.Errorf("string ended before escaped character value in '%s'", path)
+	}
+
+	return sb.String(), nil
 }

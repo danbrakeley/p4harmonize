@@ -118,7 +118,7 @@ func Harmonize(log Logger, cfg Config) error {
 		dstPathNew := filepath.Join(dstClientRoot, pair[0].Path)
 
 		// copy file from source root to destination root
-		if err := SmartCopy(srcPath, dstPathOld); err != nil {
+		if err := PerforceFileCopy(srcPath, dstPathOld); err != nil {
 			return err
 		}
 
@@ -141,12 +141,16 @@ func Harmonize(log Logger, cfg Config) error {
 		dstPath := filepath.Join(dstClientRoot, src.Path)
 
 		// copy file from source root to destination root
-		if err := SmartCopy(srcPath, dstPath); err != nil {
+		if err := PerforceFileCopy(srcPath, dstPath); err != nil {
 			return err
 		}
 
 		// add to the depot
-		if err := p4dst.Add(dstPath, p4.Changelist(cl), p4.Type(src.Type)); err != nil {
+		dstPathForAdd, err := p4.UnescapePath(dstPath)
+		if err != nil {
+			return fmt.Errorf("Error unescaping '%s': %w", dstPath, err)
+		}
+		if err := p4dst.Add(dstPathForAdd, p4.Changelist(cl), p4.Type(src.Type)); err != nil {
 			return fmt.Errorf("Unable to open '%s' for add: %w", dstPath, err)
 		}
 	}
@@ -322,40 +326,50 @@ func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
 	return out
 }
 
-// SmartCopy copies file "src" to file/path "dst", creating any missing directories needed by "dst".
-func SmartCopy(src, dst string) error {
-	srcInfo, err := os.Stat(src)
+// PerforceFileCopy copies file "src" to file/path "dst", creating any missing directories needed by "dst",
+// and handling Perforce escape characters (%00) properly.
+func PerforceFileCopy(src, dst string) error {
+	srcPath, err := p4.UnescapePath(src)
 	if err != nil {
-		return fmt.Errorf("Unable to stat '%s': %w", src, err)
+		return err
+	}
+	dstPath, err := p4.UnescapePath(dst)
+	if err != nil {
+		return err
+	}
+
+	srcInfo, err := os.Stat(srcPath)
+	if err != nil {
+		return fmt.Errorf("Unable to stat '%s': %w", srcPath, err)
 	}
 
 	if !srcInfo.Mode().IsRegular() {
-		return fmt.Errorf("'%s' is not a regular file", src)
+		return fmt.Errorf("'%s' is not a regular file", srcPath)
 	}
 	srcSize := srcInfo.Size()
 
-	dstDir := filepath.Dir(dst)
+	dstDir := filepath.Dir(dstPath)
 	if err := os.MkdirAll(dstDir, os.ModePerm); err != nil {
 		return fmt.Errorf("Unable to mkdir '%s': %w", dstDir, err)
 	}
 
-	s, err := os.Open(src)
+	s, err := os.Open(srcPath)
 	if err != nil {
-		return fmt.Errorf("Unable to open '%s': %w", src, err)
+		return fmt.Errorf("Unable to open '%s': %w", srcPath, err)
 	}
 	defer s.Close()
 
-	d, err := os.Create(dst)
+	d, err := os.Create(dstPath)
 	if err != nil {
-		return fmt.Errorf("Unable to create '%s': %w", dst, err)
+		return fmt.Errorf("Unable to create '%s': %w", dstPath, err)
 	}
 	defer d.Close()
 	n, err := io.Copy(d, s)
 	if err != nil {
-		return fmt.Errorf("Unable to copy '%s' to '%s': %w", src, dst, err)
+		return fmt.Errorf("Unable to copy '%s' to '%s': %w", srcPath, dstPath, err)
 	}
 	if n != srcSize {
-		return fmt.Errorf("Expected '%s' to copy %d bytes to '%s', but only %d were copied", src, n, dst, srcSize)
+		return fmt.Errorf("Expected '%s' to copy %d bytes to '%s', but only %d were copied", srcPath, n, dstPath, srcSize)
 	}
 	return nil
 }

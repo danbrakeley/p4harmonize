@@ -35,6 +35,10 @@ func Test_ParseSpec(t *testing.T) {
 			"... Client foo\n... Description\nCreated by\n\n... SubmitOptions submitunchanged",
 			`{"Client":"foo","Description":"\nCreated by\n","SubmitOptions":"submitunchanged"}`,
 		},
+		{"no change to special characters in path",
+			"... Root C:\\Mambo#5\\%23\\",
+			`{"Root":"C:\\Mambo#5\\%23\\"}`,
+		},
 	}
 
 	for _, tc := range cases {

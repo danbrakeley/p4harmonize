@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-// Edit checks out an existing file from the depot.
+// Edit checks out an existing file from the depot. If your path includes any reserved
+// characters (@#%*), you need to first escape your path with EscapePath.
 func (p *P4) Edit(path string, opts ...Option) error {
 	var args []string
 	for _, o := range opts {

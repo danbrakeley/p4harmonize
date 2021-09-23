@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-// Add adds a new file to the depot.
+// Add adds a new file to the depot. Unlike other p4 commands, file paths
+// passed into Add must not escape the reserved characters #, @, %, and *.
 func (p *P4) Add(path string, opts ...Option) error {
 	var args []string
 	for _, o := range opts {
@@ -22,5 +23,5 @@ func (p *P4) Add(path string, opts ...Option) error {
 			return fmt.Errorf("unrecognized option %s", o.String())
 		}
 	}
-	return p.sh.Cmdf(`%s add %s "%s"`, p.cmd(), strings.Join(args, " "), path).RunErr()
+	return p.sh.Cmdf(`%s add %s -f "%s"`, p.cmd(), strings.Join(args, " "), path).RunErr()
 }

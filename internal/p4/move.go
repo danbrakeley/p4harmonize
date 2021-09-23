@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-// Move changes the path (including capitalization changes on case sensative servers) and filetype of a file in the depot.
+// Move changes the path (including capitalization changes) and filetype of a file in the depot.
+// If your path includes any reserved characters (@#%*), you need to first escape your path with EscapePath.
 func (p *P4) Move(from string, to string, opts ...Option) error {
 	var args []string
 	for _, o := range opts {

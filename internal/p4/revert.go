@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// RevertUnchanged checks out an existing file from the depot.
-func (p *P4) RevertUnchanged(root string, opts ...Option) error {
+// RevertUnchanged reverts checked out files that have not been changed.
+func (p *P4) RevertUnchanged(path string, opts ...Option) error {
 	var args []string
 	for _, o := range opts {
 		switch ot := o.(type) {
@@ -20,5 +20,5 @@ func (p *P4) RevertUnchanged(root string, opts ...Option) error {
 			return fmt.Errorf("unrecognized option %s", o.String())
 		}
 	}
-	return p.sh.Cmdf(`%s revert -a %s "%s"`, p.cmd(), strings.Join(args, " "), root).RunErr()
+	return p.sh.Cmdf(`%s revert -a %s "%s"`, p.cmd(), strings.Join(args, " "), path).RunErr()
 }
