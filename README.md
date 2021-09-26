@@ -2,7 +2,7 @@
 
 ## TODO:
 
-- recreate UE 4.26 to 4.27 upgrade as a final test case
+- functional tests should verify the final p4 depot state
 - UX pass: output is a mess right now
   - maybe log verbose to json file, while only printing >=Info on the command line?
   - add anchored lines to output?

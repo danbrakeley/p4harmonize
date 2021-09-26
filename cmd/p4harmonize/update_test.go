@@ -8,7 +8,7 @@ import (
 	"github.com/proletariatgames/p4harmonize/internal/p4"
 )
 
-func Test_Reconcile(t *testing.T) {
+func Test_ReconcileJustPaths(t *testing.T) {
 	var cases = []struct {
 		Name    string
 		Src     string

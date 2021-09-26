@@ -110,6 +110,16 @@ func Harmonize(log Logger, cfg Config) error {
 		return fmt.Errorf("Unable to get absolute path for '%s': %w", cfg.Dst.ClientRoot, err)
 	}
 
+	// For each file that only exists in the destination, mark it for delete in the destination.
+	// NOTE: Process DstOnly BEFORE processing Match, so that any AppleDouble "%" files that
+	// got checked directly into the destination are cleaned up properly.
+	for _, dst := range diff.DstOnly {
+		dstPath := filepath.Join(dstClientRoot, dst.Path)
+		if err := p4dst.Delete(dstPath, p4.Changelist(cl)); err != nil {
+			return fmt.Errorf("Unable to mark '%s' for delete: %w", dstPath, err)
+		}
+	}
+
 	// For each file with the capitalization or the types different, copy the file, then make
 	// sure perforce is set to fix the mismatch(es).
 	for _, pair := range diff.Match {
@@ -118,7 +128,7 @@ func Harmonize(log Logger, cfg Config) error {
 		dstPathNew := filepath.Join(dstClientRoot, pair[0].Path)
 
 		// copy file from source root to destination root
-		if err := PerforceFileCopy(srcPath, dstPathOld); err != nil {
+		if err := PerforceFileCopy(srcPath, dstPathOld, pair[0].Type); err != nil {
 			return err
 		}
 
@@ -141,7 +151,7 @@ func Harmonize(log Logger, cfg Config) error {
 		dstPath := filepath.Join(dstClientRoot, src.Path)
 
 		// copy file from source root to destination root
-		if err := PerforceFileCopy(srcPath, dstPath); err != nil {
+		if err := PerforceFileCopy(srcPath, dstPath, src.Type); err != nil {
 			return err
 		}
 
@@ -152,14 +162,6 @@ func Harmonize(log Logger, cfg Config) error {
 		}
 		if err := p4dst.Add(dstPathForAdd, p4.Changelist(cl), p4.Type(src.Type)); err != nil {
 			return fmt.Errorf("Unable to open '%s' for add: %w", dstPath, err)
-		}
-	}
-
-	// For each file that only exists in the destination, mark it for delete in the destination.
-	for _, dst := range diff.DstOnly {
-		dstPath := filepath.Join(dstClientRoot, dst.Path)
-		if err := p4dst.Delete(dstPath, p4.Changelist(cl)); err != nil {
-			return fmt.Errorf("Unable to mark '%s' for delete: %w", dstPath, err)
 		}
 	}
 
@@ -328,7 +330,7 @@ func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
 
 // PerforceFileCopy copies file "src" to file/path "dst", creating any missing directories needed by "dst",
 // and handling Perforce escape characters (%00) properly.
-func PerforceFileCopy(src, dst string) error {
+func PerforceFileCopy(src, dst, filetype string) error {
 	srcPath, err := p4.UnescapePath(src)
 	if err != nil {
 		return err
@@ -338,6 +340,19 @@ func PerforceFileCopy(src, dst string) error {
 		return err
 	}
 
+	switch filetype {
+	case "apple":
+		srcDouble := filepath.Join(filepath.Dir(srcPath), "%"+filepath.Base(srcPath))
+		dstDouble := filepath.Join(filepath.Dir(dstPath), "%"+filepath.Base(dstPath))
+		if err := verifyAndCopy(srcDouble, dstDouble); err != nil {
+			return err
+		}
+	}
+
+	return verifyAndCopy(srcPath, dstPath)
+}
+
+func verifyAndCopy(srcPath, dstPath string) error {
 	srcInfo, err := os.Stat(srcPath)
 	if err != nil {
 		return fmt.Errorf("Unable to stat '%s': %w", srcPath, err)
