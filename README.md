@@ -2,12 +2,12 @@
 
 ## TODO:
 
-- functional tests should verify the final p4 depot state
-- UX pass: output is a mess right now
+- UX pass: clean up output to be more readable
   - maybe log verbose to json file, while only printing >=Info on the command line?
   - add anchored lines to output?
   - add progress during longer stretches? use 4.26-4.27 test to determine where this might be needed
 - test on platforms (only tested on Windows so far)
+- integration tests could be cleaner (maybe remove the bash scripts and do it all in Go?)
 
 ## Install and Run
 
