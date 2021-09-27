@@ -9,14 +9,6 @@ then
   exit 1
 fi
 
-echo "Checking for docker..."
-if ! command -v docker &> /dev/null
-then
-  echo "Could not find docker. Make sure it is installed and in your path."
-  echo "https://hub.docker.com/editions/community/docker-ce-desktop-windows"
-  exit 1
-fi
-
 echo "Checking for mage..."
 if ! command -v mage &> /dev/null
 then

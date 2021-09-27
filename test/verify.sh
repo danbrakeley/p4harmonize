@@ -39,7 +39,7 @@ DSTFILES=`$DST_P4 -z tag files -e //$DST_CLIENT/... |\
   paste -d " "  - -`
 
 if [[ "$SRCFILES" != "$DSTFILES" ]]; then
-  echo "TEST FAILED: Source and Desintation depots are not in sync"
+  echo "TEST FAILED: Source and Destination depots are not in sync"
   echo " --SOURCE--"
   echo "$SRCFILES"
   echo " --DESTINATION--"

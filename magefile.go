@@ -44,7 +44,7 @@ func Run() {
 	})
 }
 
-// Runs integration tests (spings up perforce servers via docker, then brings them down at the end).
+// Runs integration tests (spins up perforce servers via docker, then brings them down at the end).
 func LongTest() {
 	mg.SerialDeps(Build, TestPrep)
 	defer TestDown()
