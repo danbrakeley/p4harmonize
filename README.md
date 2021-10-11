@@ -4,7 +4,7 @@
 
 `p4harmonize` is a tool for getting the head revision of a stream on one perforce server to mirror the head revision from some other perforce server. It can reconcile files, fix differences in file name/path capitalization, fix the file type, and fix improperly checked in AppleDouble files created by the "apple" file type.
 
-`p4harmonize` was built with Unreal Engine releases in mind, where the Epic licensee perforce server is used as the source, and a dedicated stream on a project's perforce server is used as the destination. It is intended to be used with a setup similar to [the one recommended by Epic](https://docs.unrealengine.com/4.26/en-US/ProgrammingAndScripting/ProgrammingWithCPP/DownloadingSourceCode/UpdatingSourceCode/#option3:usingperforce). At Proletariat, we have different names, but the purposes are the same:
+`p4harmonize` was built with Unreal Engine releases in mind, where the Epic licensee perforce server is used as the source, and a dedicated stream on a project's perforce server is used as the destination. It is intended to be used with a setup similar to [the one recommended by Epic](https://docs.unrealengine.com/4.26/en-US/ProgrammingAndScripting/ProgrammingWithCPP/DownloadingSourceCode/UpdatingSourceCode/#integrating,merging,andbranching). At Proletariat, we have different names, but the purposes are the same:
 
 name | description
 --- | ---
@@ -14,7 +14,9 @@ name | description
 
 ## Install
 
-There's no pre-packaged binaries at this point, so you'll need to build one yourself. To do that, you'll need [git](https://git-scm.com/downloads) and a [recent version of Go](https://golang.org/dl/), and then you can just use the [go install](https://golang.org/ref/mod#go-install) command to download, build, and put the result in your path:
+You can download the latest Windows executable from the [releases page](https://github.com/proletariatgames/p4harmonize/releases), or you can build it yourself.
+
+To build it, you'll need [git](https://git-scm.com/downloads) and a [recent version of Go](https://golang.org/dl/), and then you can just use the [go install](https://golang.org/ref/mod#go-install) command to download, build, and put the result in your path:
 
 ```text
 go install github.com/proletariatgames/p4harmonize
@@ -22,7 +24,7 @@ go install github.com/proletariatgames/p4harmonize
 
 ## Usage
 
-`p4harmonize` pulls configuration from a `config.toml` file, which it looks for in the current folder. You can change where it looks by passing `-config <filename>`.
+`p4harmonize` pulls configuration from a `config.toml` file, which it looks for in the current working directory. You can change where it looks by passing `-config <filename>`.
 
 Here's an example `config.toml` file:
 
@@ -46,7 +48,7 @@ new_client_stream = "//test/engine_epic"  # this needs to already exist
 
 While it runs, it outputs status updates and every individual `p4` command it is running so you can follow along. Note that for an Unreal Engine upgrade, this process can easily take hours to complete.
 
-When it is done, you still need to go in and submit the changelist it created yourself. This gives you an opportunity to sanity check the work before it gets added to your Perforce depot. This also allows you to keep the destination locked until the moment you are ready to submit the changes.
+When it is done, you still need to go in and submit the changelist it created yourself. This gives you an opportunity to sanity check the work before it gets added to your Perforce depot.
 
 ## Runtime requirements
 
@@ -62,7 +64,7 @@ When it is done, you still need to go in and submit the changelist it created yo
 
 ## Development setup
 
-To write code and create builds, you just need the deps listed above (git, Go, p4, and bash). If you want to run the functional tests, where p4harmonize is run against two test Perforce servers, you will also need Docker. On Windows and Mac, you'll want [Docker Desktop](https://www.docker.com/products/docker-desktop), and on Linux you'll want [Docker Server](https://docs.docker.com/engine/install/#server).
+To write code and create builds, you just need the deps listed above (git, Go, p4, and bash). If you want to run the functional tests, you will also need Docker. On Windows and Mac, you'll want [Docker Desktop](https://www.docker.com/products/docker-desktop), and on Linux you'll want [Docker Server](https://docs.docker.com/engine/install/#server).
 
 Once you have all that installed, you can clone down the source code with git:
 
@@ -80,16 +82,16 @@ There's a `magefile.go` in the root folder that automates building/testing, and 
 $ mage
 Targets:
   build       tests and builds the app (output goes to "local" folder)
-  longTest    Runs integration tests (spins up perforce servers via docker, then brings them down at the end).
-  run         unit tests, builds, and runs the app
-  testDown    kills and deletes the test perforce servers.
-  testPrep    gets everything ready for a run against test servers, and can be used to reset test servers after a test run.
-  testUp      brings up a test environment with two perforce servers, on ports 1667 and 1668, to act as the source and destination perforce servers for testing p4harmonize.
+  longTest    runs a fresh build of p4harmonize against test files in docker-hosted perforce servers.
+  run         runs unit tests, builds, and runs the app
+  testDown    brings down and removes the docker contains started by TestUp.
+  testPrep    runs testDown, then testUp, then executes `test/prop.sh` to fill the servers with test data.
+  testUp      brings up two empty perforce servers via Docker, listening on ports 1667 and 1668, with a single super user named "super" (no password).
 ```
 
-Note that mage target names are not case sensitive, ie `mage longTest` and `mage longtest` will all do the same thing.
+Note that mage target names are not case sensitive, ie `mage longTest` and `mage longtest` are interpreted the same.
 
-If you see "No .go files marked with the mage build tag in this directory", make sure you there is a `magefile.go` in the current folder (`mage` does not look to parent folders for magefiles).
+If you see `No .go files marked with the mage build tag in this directory`, make sure you there is a `magefile.go` in the current folder (Mage does not look to parent folders for magefiles).
 
 The `build` and `run` targets will run unit tests and build an executable in a folder named `local` (which is where it will look for a `config.toml` file).
 
