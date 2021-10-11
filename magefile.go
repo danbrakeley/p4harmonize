@@ -32,7 +32,7 @@ func Build() {
 	sh.Cmdf("go build -o local/%s ./cmd/%s", target, cmd).Run()
 }
 
-// Run unit tests, builds, and runs the app
+// Run runs unit tests, builds, and runs the app
 func Run() {
 	mg.Deps(Build)
 
@@ -44,7 +44,7 @@ func Run() {
 	})
 }
 
-// Runs integration tests (spins up perforce servers via docker, then brings them down at the end).
+// LongTest runs a fresh build of p4harmonize against test files in docker-hosted perforce servers.
 func LongTest() {
 	mg.SerialDeps(Build, TestPrep)
 	defer TestDown()
@@ -52,7 +52,7 @@ func LongTest() {
 	target := sh.ExeName(cmd)
 
 	sh.InDir("local", func() {
-		sh.Echo("Running integration tests...")
+		sh.Echo("Running p4harmonize against test servers...")
 		sh.Cmdf("%s -config ../test/config.toml", target).Run()
 	})
 	sh.InDir("test", func() {
@@ -69,28 +69,29 @@ func LongTest() {
 	sh.Echo("***")
 }
 
-// TestPrep gets everything ready for a run against test servers, and can
-// be used to reset test servers after a test run.
+// TestPrep runs testDown, then testUp, then executes `test/prop.sh` to fill the servers with test data.
 func TestPrep() {
 	mg.SerialDeps(TestDown, TestUp)
+	sh.InDir("test", func() {
+		sh.Echo("Running test/prep.sh...")
+		sh.Cmdf("./prep.sh").Bash()
+	})
 	sh.RemoveAll("./local/p4/dst")
 }
 
-// TestUp brings up a test environment with two perforce servers, on ports 1667 and 1668, to act as the
-// source and destination perforce servers for testing p4harmonize.
+// TestUp brings up two empty perforce servers via Docker, listening on ports 1667 and 1668, with
+// a single super user named "super" (no password).
 func TestUp() {
 	sh.InDir("test", func() {
-		sh.Echo("Running docker compose...")
+		sh.Echo("Bringing up test perforce servers on local ports 1667 and 1668...")
 		sh.Cmdf("docker compose up --detach --force-recreate --build").Run()
-		sh.Echo("Running prep.sh...")
-		sh.Cmdf("./prep.sh").Bash()
 	})
 }
 
-// TestDown kills and deletes the test perforce servers.
+// TestDown brings down and removes the docker contains started by TestUp.
 func TestDown() {
 	sh.InDir("test", func() {
-		sh.Echo("Stopping and removing containers...")
+		sh.Echo("Stopping and removing test perforce servers...")
 		sh.Cmdf("docker compose stop -t 1").Run()
 		sh.Cmdf("docker compose rm -f").Run()
 	})

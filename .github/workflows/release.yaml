@@ -1,0 +1,20 @@
+name: build release zip
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  release:
+    name: Release Go Binary
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: wangyoucao577/go-release-action@v1.20
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          goos: windows
+          goarch: amd64
+          goversion: "1.17.2"
+          project_path: "./cmd/p4harmonize"
+          extra_files: LICENSE.txt README.md
