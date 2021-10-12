@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/danbrakeley/bsh"
 	"github.com/magefile/mage/mg"
@@ -29,7 +31,22 @@ func Build() {
 
 	sh.Echof("Building %s...", target)
 	sh.MkdirAll("local/")
-	sh.Cmdf("go build -o local/%s ./cmd/%s", target, cmd).Run()
+
+	// grab git commit hash to use as version for local builds
+	commit := "(dev)"
+	var b bytes.Buffer
+	n := sh.Cmd(`git log --pretty=format:'%h' -n 1`).Out(&b).RunExitStatus()
+	if n == 0 {
+		commit = strings.TrimSpace(b.String())
+	}
+
+	sh.Cmdf(
+		`go build -ldflags '`+
+			`-X "github.com/proletariatgames/p4harmonize/internal/buildvar.Version=%s" `+
+			`-X "github.com/proletariatgames/p4harmonize/internal/buildvar.BuildTime=%s" `+
+			`-X "github.com/proletariatgames/p4harmonize/internal/buildvar.ReleaseURL=https://github.com/proletariatgames/p4harmonize"`+
+			`' -o local/%s ./cmd/%s`, commit, time.Now().Format(time.RFC3339), target, cmd,
+	).Run()
 }
 
 // Run runs unit tests, builds, and runs the app

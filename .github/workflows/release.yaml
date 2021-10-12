@@ -18,3 +18,7 @@ jobs:
           goversion: "1.17.2"
           project_path: "./cmd/p4harmonize"
           extra_files: LICENSE.txt README.md
+          ldflags:
+            '-X "github.com/danbrakeley/actiontest/internal/buildvar.Version=${{ github.event.release.tag_name }}" -X
+            "github.com/danbrakeley/actiontest/internal/buildvar.BuildTime=${{ github.event.release.created_at }}" -X
+            "github.com/danbrakeley/actiontest/internal/buildvar.ReleaseURL=${{ github.event.release.html_url }}"'

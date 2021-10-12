@@ -2,19 +2,49 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/danbrakeley/frog"
+	"github.com/proletariatgames/p4harmonize/internal/buildvar"
 )
 
-var (
-	// config will be loaded from the first extant file from this list
-	configFileNames = []string{
-		"config.toml",
-		"config.tml",
+func PrintUsage() {
+	version := "<local build>"
+	if len(buildvar.Version) > 0 {
+		version = buildvar.Version
 	}
-)
+	buildTime := "<not set>"
+	if len(buildvar.BuildTime) > 0 {
+		buildTime = buildvar.BuildTime
+	}
+	url := "https://github.com/proletariatgames/p4harmonize"
+	if len(buildvar.ReleaseURL) > 0 {
+		url = buildvar.ReleaseURL
+	}
+
+	fmt.Fprintf(os.Stderr,
+		strings.Join([]string{
+			"",
+			"p4harmonize %s, created %s",
+			"%s",
+			"",
+			"Usage:",
+			"\tp4harmonize [--config PATH]",
+			"\tp4harmonize --version",
+			"\tp4harmonize --help",
+			"Options:",
+			"\t-c, --config PATH     Config file location (default: 'config.toml')",
+			"\t-v, --version         Print just the version number (to stdout)",
+			"\t-h, --help            Print this message (to stderr)",
+			"",
+			"Config files must be in TOML format. See the README for an example.",
+			"",
+		}, "\n"), version, buildTime, url,
+	)
+}
 
 func main() {
 	status := mainExit()
@@ -28,9 +58,38 @@ func main() {
 }
 
 func mainExit() int {
+	flag.Usage = PrintUsage
+
 	var cfgPath string
+	var showVersion bool
+	var showHelp bool
+	flag.StringVar(&cfgPath, "c", "config.toml", "config file location")
 	flag.StringVar(&cfgPath, "config", "config.toml", "config file location")
+	flag.BoolVar(&showVersion, "v", false, "show version info")
+	flag.BoolVar(&showVersion, "version", false, "show version info")
+	flag.BoolVar(&showHelp, "h", false, "show version info")
+	flag.BoolVar(&showHelp, "help", false, "show version info")
 	flag.Parse()
+
+	if showVersion {
+		if len(buildvar.Version) == 0 {
+			fmt.Printf("unknown\n")
+			return 1
+		}
+		fmt.Printf("%s\n", strings.TrimPrefix(buildvar.Version, "v"))
+		return 0
+	}
+
+	if showHelp {
+		flag.Usage()
+		return 0
+	}
+
+	if len(flag.Args()) > 0 {
+		fmt.Printf("unrecognized arguments: %v\n", strings.Join(flag.Args(), " "))
+		flag.Usage()
+		return 1
+	}
 
 	start := time.Now()
 	log := MakeLogger(frog.New(frog.Auto, frog.HideLevel, frog.MessageOnRight, frog.FieldIndent10), "")
