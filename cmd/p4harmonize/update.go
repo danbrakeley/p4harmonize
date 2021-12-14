@@ -319,10 +319,12 @@ func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
 
 	for i := is; i < len(src); i++ {
 		out.SrcOnly = append(out.SrcOnly, src[i])
+		out.HasDifference = true
 	}
 
 	for i := id; i < len(dst); i++ {
 		out.DstOnly = append(out.DstOnly, dst[i])
+		out.HasDifference = true
 	}
 
 	return out
