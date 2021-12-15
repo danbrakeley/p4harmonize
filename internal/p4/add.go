@@ -2,12 +2,13 @@ package p4
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
-// Add adds a new file to the depot. Unlike other p4 commands, file paths
+// Add adds new files to the depot. Unlike other p4 commands, file paths
 // passed into Add must not escape the reserved characters #, @, %, and *.
-func (p *P4) Add(path string, opts ...Option) error {
+func (p *P4) Add(paths []string, opts ...Option) error {
 	var args []string
 	for _, o := range opts {
 		switch ot := o.(type) {
@@ -23,5 +24,14 @@ func (p *P4) Add(path string, opts ...Option) error {
 			return fmt.Errorf("unrecognized option %s", o.String())
 		}
 	}
-	return p.sh.Cmdf(`%s add %s -f "%s"`, p.cmd(), strings.Join(args, " "), path).RunErr()
+
+	// write paths to disk to avoid command line character limit
+	file, err := os.CreateTemp("", "p4harmonize_add_*.txt")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	file.WriteString(strings.Join(paths, "\n"))
+
+	return p.sh.Cmdf(`%s -x "%s" add %s -If`, p.cmd(), file.Name(), strings.Join(args, " ")).RunErr()
 }
