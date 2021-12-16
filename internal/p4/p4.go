@@ -193,7 +193,8 @@ func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
 						return fmt.Errorf("error parsing depot prefix: %w", err)
 					}
 				}
-				cur.Path = strings.TrimPrefix(raw, prefix)
+				// remove the prefix by length since the depot prefix may differ in case
+				cur.Path = raw[len(prefix):]
 			case strings.HasPrefix(line[4:], "action"):
 				cur.Action = strings.TrimSpace(line[10:])
 			case strings.HasPrefix(line[4:], "change"):
