@@ -146,22 +146,31 @@ func Harmonize(log Logger, cfg Config) error {
 	}
 
 	// For each file that only exists in the source, copy it over then add it to the destination.
-	for _, src := range diff.SrcOnly {
-		srcPath := filepath.Join(str.ClientRoot, src.Path)
-		dstPath := filepath.Join(dstClientRoot, src.Path)
+	srcOnlyFilesByType := GroupFilesByType(diff.SrcOnly)
 
-		// copy file from source root to destination root
-		if err := PerforceFileCopy(srcPath, dstPath, src.Type); err != nil {
-			return err
+	for srcType, srcFiles := range srcOnlyFilesByType {
+		var pathsToAdd []string
+
+		for _, src := range srcFiles {
+			srcPath := filepath.Join(str.ClientRoot, src.Path)
+			dstPath := filepath.Join(dstClientRoot, src.Path)
+
+			// copy file from source root to destination root
+			if err := PerforceFileCopy(srcPath, dstPath, src.Type); err != nil {
+				return err
+			}
+
+			// add to the depot
+			dstPathForAdd, err := p4.UnescapePath(dstPath)
+			if err != nil {
+				return fmt.Errorf("Error unescaping '%s': %w", dstPath, err)
+			}
+
+			pathsToAdd = append(pathsToAdd, dstPathForAdd)
 		}
 
-		// add to the depot
-		dstPathForAdd, err := p4.UnescapePath(dstPath)
-		if err != nil {
-			return fmt.Errorf("Error unescaping '%s': %w", dstPath, err)
-		}
-		if err := p4dst.Add(dstPathForAdd, p4.Changelist(cl), p4.Type(src.Type)); err != nil {
-			return fmt.Errorf("Unable to open '%s' for add: %w", dstPath, err)
+		if err := p4dst.Add(pathsToAdd, p4.Changelist(cl), p4.Type(srcType)); err != nil {
+			return fmt.Errorf("Unable to open %d file(s) for add: %w", len(pathsToAdd), err)
 		}
 	}
 
@@ -389,4 +398,16 @@ func verifyAndCopy(srcPath, dstPath string) error {
 		return fmt.Errorf("Expected '%s' to copy %d bytes to '%s', but only %d were copied", srcPath, n, dstPath, srcSize)
 	}
 	return nil
+}
+
+// Splits a list of files into groups of files in which each group
+// shares the same perforce file type
+func GroupFilesByType(files []p4.DepotFile) map[string][]p4.DepotFile {
+	filesByType := map[string][]p4.DepotFile{}
+
+	for _, file := range files {
+		filesByType[file.Type] = append(filesByType[file.Type], file)
+	}
+
+	return filesByType
 }
