@@ -26,9 +26,10 @@ func (p *P4) Add(paths []string, opts ...Option) error {
 	}
 
 	// write paths to disk to avoid command line character limit
-	file, err := os.CreateTemp("", "p4harmonize_add_*.txt")
+	tmpFilePattern := "p4harmonize_add_*.txt"
+	file, err := os.CreateTemp("", tmpFilePattern)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error creating temp file for pattern %s: %w", tmpFilePattern, err)
 	}
 	defer os.Remove(file.Name())
 	file.WriteString(strings.Join(paths, "\n"))
