@@ -26,20 +26,7 @@ func Test_ReconcileJustPaths(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
-			var src, dst []p4.DepotFile
-			for _, path := range strings.Split(tc.Src, ",") {
-				if len(path) == 0 {
-					continue
-				}
-				src = append(src, p4.DepotFile{Path: path})
-			}
-			for _, path := range strings.Split(tc.Dst, ",") {
-				if len(path) == 0 {
-					continue
-				}
-				dst = append(dst, p4.DepotFile{Path: path})
-			}
-
+			src, dst := makeDepotFilesFromStrings(tc.Src, tc.Dst)
 			actual := Reconcile(src, dst)
 
 			var actualMatch string
@@ -76,4 +63,46 @@ func Test_ReconcileJustPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_ReconcileHasDifference(t *testing.T) {
+	var cases = []struct {
+		Name     string
+		Src      string
+		Dst      string
+		Expected bool
+	}{
+		{"simple match", "foo", "foo", false},
+		{"missing src", "", "foo", true},
+		{"missing dst", "foo", "", true},
+		{"complex match", "a,b,c,f", "b,c,d,f,g", true},
+		{"mismatched case", "a,b,c", "a,B,", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			src, dst := makeDepotFilesFromStrings(tc.Src, tc.Dst)
+			actual := Reconcile(src, dst)
+
+			if tc.Expected != actual.HasDifference {
+				t.Errorf("expected HasDifference to be %v, got %v", tc.Expected, actual.HasDifference)
+			}
+		})
+	}
+}
+
+func makeDepotFilesFromStrings(s, d string) (src []p4.DepotFile, dst []p4.DepotFile) {
+	for _, path := range strings.Split(s, ",") {
+		if len(path) == 0 {
+			continue
+		}
+		src = append(src, p4.DepotFile{Path: path})
+	}
+	for _, path := range strings.Split(d, ",") {
+		if len(path) == 0 {
+			continue
+		}
+		dst = append(dst, p4.DepotFile{Path: path})
+	}
+	return src, dst
 }
