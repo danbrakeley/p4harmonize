@@ -113,11 +113,13 @@ func Harmonize(log Logger, cfg Config) error {
 	// For each file that only exists in the destination, mark it for delete in the destination.
 	// NOTE: Process DstOnly BEFORE processing Match, so that any AppleDouble "%" files that
 	// got checked directly into the destination are cleaned up properly.
+	var pathsToDelete []string
 	for _, dst := range diff.DstOnly {
 		dstPath := filepath.Join(dstClientRoot, dst.Path)
-		if err := p4dst.Delete(dstPath, p4.Changelist(cl)); err != nil {
-			return fmt.Errorf("Unable to mark '%s' for delete: %w", dstPath, err)
-		}
+		pathsToDelete = append(pathsToDelete, dstPath)
+	}
+	if err := p4dst.Delete(pathsToDelete, p4.Changelist(cl)); err != nil {
+		return fmt.Errorf("Unable to mark %d file(s) for delete: %w", len(pathsToDelete), err)
 	}
 
 	// For each file with the capitalization or the types different, copy the file, then make
