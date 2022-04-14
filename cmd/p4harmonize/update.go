@@ -124,26 +124,38 @@ func Harmonize(log Logger, cfg Config) error {
 
 	// For each file with the capitalization or the types different, copy the file, then make
 	// sure perforce is set to fix the mismatch(es).
-	for _, pair := range diff.Match {
-		srcPath := filepath.Join(str.ClientRoot, pair[0].Path)
-		dstPathOld := filepath.Join(dstClientRoot, pair[1].Path)
-		dstPathNew := filepath.Join(dstClientRoot, pair[0].Path)
+	matchFilePairsByType := GroupFilePairsByType(diff.Match)
 
-		// copy file from source root to destination root
-		if err := PerforceFileCopy(srcPath, dstPathOld, pair[0].Type); err != nil {
-			return err
-		}
+	for newType, diffFiles := range matchFilePairsByType {
+		var pathsToEdit []string
 
-		// mark file in destination for edit with type
-		if err := p4dst.Edit(dstPathOld, p4.Changelist(cl), p4.Type(pair[0].Type)); err != nil {
-			return fmt.Errorf("Unable to open '%s' for edit: %w", dstPathOld, err)
-		}
+		for _, pair := range diffFiles {
+			srcPath := filepath.Join(str.ClientRoot, pair[0].Path)
+			dstPathNew := filepath.Join(dstClientRoot, pair[0].Path)
+			dstPathOld := filepath.Join(dstClientRoot, pair[1].Path)
 
-		if dstPathOld != dstPathNew {
-			// mark file in destination for move
-			if err := p4dst.Move(dstPathOld, dstPathNew, p4.Changelist(cl), p4.Type(pair[0].Type)); err != nil {
-				return fmt.Errorf("Unable to open '%s' for move to '%s': %w", dstPathOld, dstPathNew, err)
+			// copy file from source root to destination root
+			if err := PerforceFileCopy(srcPath, dstPathOld, pair[0].Type); err != nil {
+				return err
 			}
+
+			if dstPathOld != dstPathNew {
+				// path has changed, do a single file edit and move
+				if err := p4dst.Edit([]string{dstPathOld}, p4.Changelist(cl), p4.Type(newType)); err != nil {
+					return fmt.Errorf("Unable to open '%s' for edit: %w", dstPathOld, err)
+				}
+				if err := p4dst.Move(dstPathOld, dstPathNew, p4.Changelist(cl), p4.Type(newType)); err != nil {
+					return fmt.Errorf("Unable to open '%s' for move to '%s': %w", dstPathOld, dstPathNew, err)
+				}
+			} else {
+				// add to array for batch edit
+				pathsToEdit = append(pathsToEdit, dstPathOld)
+			}
+		}
+
+		// mark files in destination for edit with type
+		if err := p4dst.Edit(pathsToEdit, p4.Changelist(cl), p4.Type(newType)); err != nil {
+			return fmt.Errorf("Unable to open %d file(s) for edit: %w", len(pathsToEdit), err)
 		}
 	}
 
@@ -412,4 +424,16 @@ func GroupFilesByType(files []p4.DepotFile) map[string][]p4.DepotFile {
 	}
 
 	return filesByType
+}
+
+// Splits a list of file pairs (new, old) into groups in which each group
+// shares the same perforce file type (for the new file)
+func GroupFilePairsByType(filePairs [][2]p4.DepotFile) map[string][][2]p4.DepotFile {
+	filePairsByType := map[string][][2]p4.DepotFile{}
+
+	for _, filePair := range filePairs {
+		filePairsByType[filePair[0].Type] = append(filePairsByType[filePair[0].Type], filePair)
+	}
+
+	return filePairsByType
 }

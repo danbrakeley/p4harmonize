@@ -2,12 +2,13 @@ package p4
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
 // Edit checks out an existing file from the depot. If your path includes any reserved
 // characters (@#%*), you need to first escape your path with EscapePath.
-func (p *P4) Edit(path string, opts ...Option) error {
+func (p *P4) Edit(paths []string, opts ...Option) error {
 	var args []string
 	for _, o := range opts {
 		switch ot := o.(type) {
@@ -23,5 +24,15 @@ func (p *P4) Edit(path string, opts ...Option) error {
 			return fmt.Errorf("unrecognized option %s", o.String())
 		}
 	}
-	return p.sh.Cmdf(`%s edit %s "%s"`, p.cmd(), strings.Join(args, " "), path).RunErr()
+
+	// write paths to disk to avoid command line character limit
+	tmpFilePattern := "p4harmonize_edit_*.txt"
+	file, err := os.CreateTemp("", tmpFilePattern)
+	if err != nil {
+		return fmt.Errorf("Error creating temp file for pattern %s: %w", tmpFilePattern, err)
+	}
+	defer os.Remove(file.Name())
+	file.WriteString(strings.Join(paths, "\n"))
+
+	return p.sh.Cmdf(`%s -x "%s" edit %s`, p.cmd(), file.Name(), strings.Join(args, " ")).RunErr()
 }
