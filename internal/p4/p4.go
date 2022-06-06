@@ -139,6 +139,7 @@ type DepotFile struct {
 	Action string
 	CL     string
 	Type   string
+	Digest string
 }
 
 // DepotFileCaseInsensitive allows sorting slices of DepotFile by path, but ignoring case.
@@ -151,11 +152,12 @@ func (x DepotFileCaseInsensitive) Less(i, j int) bool {
 func (x DepotFileCaseInsensitive) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
 
 // runAndParseDepotFiles calls the given command, which is expected to return a list of records, each
-// with at least a depotFile, and optionally also a type, change, and action.
+// with at least a depotFile, and optionally also a type, change, action, digest, headType, headChange,
+// and headAction.
 // The results are then sorted by Path (case-insensitive) and returned.
 func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
-	if !strings.Contains(cmd, "-ztag") && !strings.Contains(cmd, "-z tag") {
-		return nil, fmt.Errorf("missing '-z tag' in cmd: %s", cmd)
+	if !strings.Contains(cmd, "-ztag") && !strings.Contains(cmd, "-z tag")  && !strings.Contains(cmd, "fstat") {
+		return nil, fmt.Errorf("missing '-z tag' in non-fstat cmd: %s", cmd)
 	}
 
 	_, streamDepth, err := p.StreamInfo()
@@ -197,10 +199,18 @@ func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
 				cur.Path = raw[len(prefix):]
 			case strings.HasPrefix(line[4:], "action"):
 				cur.Action = strings.TrimSpace(line[10:])
+			case strings.HasPrefix(line[4:], "headAction"):
+				cur.Action = strings.TrimSpace(line[14:])
 			case strings.HasPrefix(line[4:], "change"):
 				cur.CL = strings.TrimSpace(line[10:])
+			case strings.HasPrefix(line[4:], "headChange"):
+				cur.CL = strings.TrimSpace(line[14:])
 			case strings.HasPrefix(line[4:], "type"):
 				cur.Type = strings.TrimSpace(line[8:])
+			case strings.HasPrefix(line[4:], "headType"):
+				cur.Type = strings.TrimSpace(line[12:])
+			case strings.HasPrefix(line[4:], "digest"):
+				cur.Digest = strings.TrimSpace(line[10:])
 			}
 
 			return nil

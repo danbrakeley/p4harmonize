@@ -309,8 +309,13 @@ func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
 		cmp := strings.Compare(srcCmp, dstCmp)
 		switch {
 		case cmp == 0:
-			out.Match = append(out.Match, [2]p4.DepotFile{src[is], dst[id]})
-			if src[is].Path != dst[id].Path || src[is].Type != dst[id].Type {
+			caseDifference := src[is].Path != dst[id].Path
+			typeDifference := src[is].Type != dst[id].Type
+			// If we don't have a digest, assume it's different (since we'll use `p4 revert -a`),
+			// otherwise compare digests to see if there's a difference.
+			contentDifference := len(src[is].Digest) == 0 || src[is].Digest != dst[id].Digest
+			if caseDifference || typeDifference || contentDifference {
+				out.Match = append(out.Match, [2]p4.DepotFile{src[is], dst[id]})
 				out.HasDifference = true
 			}
 			is++
