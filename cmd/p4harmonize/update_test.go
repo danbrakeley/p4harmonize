@@ -17,16 +17,18 @@ func Test_ReconcileJustPaths(t *testing.T) {
 		SrcOnly string
 		DstOnly string
 	}{
-		{"simple match", "foo", "foo", "foo:foo", "", ""},
+		{"simple match (no digest)", "foo", "foo", "foo:foo", "", ""},
 		{"missing src", "", "foo", "", "", "foo"},
 		{"missing dst", "foo", "", "", "foo", ""},
 		{"complex match", "a,b,c,f", "b,c,d,f,g", "b:b,c:c,f:f", "a", "d,g"},
+		{"same digest", "foo+somedigest", "foo+somedigest", "", "", ""},
+		{"differing digest", "foo+somedigest", "foo+otherdigest", "foo:foo", "", ""},
 		{"mismatched case", "a,b,c", "a,B,", "a:a,b:B", "c", ""},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
-			src, dst := makeDepotFilesFromStrings(tc.Src, tc.Dst)
+			src, dst := makeDepotFilesFromString(tc.Src), makeDepotFilesFromString(tc.Dst)
 			actual := Reconcile(src, dst)
 
 			var actualMatch string
@@ -72,16 +74,18 @@ func Test_ReconcileHasDifference(t *testing.T) {
 		Dst      string
 		Expected bool
 	}{
-		{"simple match", "foo", "foo", false},
+		{"simple match (no digest)", "foo", "foo", true},
 		{"missing src", "", "foo", true},
 		{"missing dst", "foo", "", true},
 		{"complex match", "a,b,c,f", "b,c,d,f,g", true},
 		{"mismatched case", "a,b,c", "a,B,", true},
+		{"same digest", "foo+somedigest", "foo+somedigest", false},
+		{"differing digest", "foo+somedigest", "foo+otherdigest", true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
-			src, dst := makeDepotFilesFromStrings(tc.Src, tc.Dst)
+			src, dst := makeDepotFilesFromString(tc.Src), makeDepotFilesFromString(tc.Dst)
 			actual := Reconcile(src, dst)
 
 			if tc.Expected != actual.HasDifference {
@@ -91,18 +95,18 @@ func Test_ReconcileHasDifference(t *testing.T) {
 	}
 }
 
-func makeDepotFilesFromStrings(s, d string) (src []p4.DepotFile, dst []p4.DepotFile) {
-	for _, path := range strings.Split(s, ",") {
+func makeDepotFilesFromString(paths string) (depotFiles []p4.DepotFile) {
+	for _, path := range strings.Split(paths, ",") {
 		if len(path) == 0 {
 			continue
 		}
-		src = append(src, p4.DepotFile{Path: path})
-	}
-	for _, path := range strings.Split(d, ",") {
-		if len(path) == 0 {
-			continue
+
+		pathAndDigest := strings.SplitN(path, "+", 2)
+		if len(pathAndDigest) == 2 {
+			depotFiles = append(depotFiles, p4.DepotFile{Path: pathAndDigest[0], Digest: pathAndDigest[1]})
+		} else {
+			depotFiles = append(depotFiles, p4.DepotFile{Path: path})
 		}
-		dst = append(dst, p4.DepotFile{Path: path})
 	}
-	return src, dst
+	return depotFiles
 }
