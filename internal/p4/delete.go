@@ -2,11 +2,11 @@ package p4
 
 import (
 	"fmt"
-	"os"
 	"strings"
 )
 
-// Delete marks a file in the depot for delete (which deletes any local copy of the file as well).
+// Delete marks one or more files for delete.
+// Note that this will call `p4 delete`, which will immediately delete the local copy of the file.
 func (p *P4) Delete(paths []string, opts ...Option) error {
 	var args []string
 	for _, o := range opts {
@@ -21,13 +21,11 @@ func (p *P4) Delete(paths []string, opts ...Option) error {
 	}
 
 	// write paths to disk to avoid command line character limit
-	tmpFilePattern := "p4harmonize_delete_*.txt"
-	file, err := os.CreateTemp("", tmpFilePattern)
+	fnCleanup, filename, err := WriteTempFile("p4harmonize_delete_*.txt", strings.Join(paths, "\n"))
 	if err != nil {
-		return fmt.Errorf("Error creating temp file for pattern %s: %w", tmpFilePattern, err)
+		return err
 	}
-	defer os.Remove(file.Name())
-	file.WriteString(strings.Join(paths, "\n"))
+	defer fnCleanup()
 
-	return p.sh.Cmdf(`%s -x "%s" delete %s`, p.cmd(), file.Name(), strings.Join(args, " ")).RunErr()
+	return p.sh.Cmdf(`%s -x "%s" delete %s`, p.cmd(), filename, strings.Join(args, " ")).RunErr()
 }

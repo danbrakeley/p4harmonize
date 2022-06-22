@@ -97,11 +97,11 @@ The `build` and `run` targets will run unit tests and build an executable in a f
 
 To run a suite of integration tests against actual perforce servers, just run `mage longtest`. This will bring up two docker containers running perforce, and then run some scripts to populate each with different files, and then run p4harmonize against them and verify the results.
 
+## Special Thanks!
+
+Thanks to [Bohdon Sayre](https://github.com/bohdon) and [Jørgen P. Tjernø](https://github.com/jorgenpt) for contributing time and code to help me fix my bugs and improve performance!
+
 ## TODO:
 
-- UX pass: clean up output to be more readable
-  - maybe log verbose to json file, while only printing >=Info on the command line?
-  - add anchored lines to output?
-- see if threading operations can speed up the total run time
-  - upgrading UE4.26 to UE4.27 took just under 4h (which isn't terrible)
+- clean up output to be more readable
 - test on other platforms (only tested on Windows so far)

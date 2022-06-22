@@ -2,7 +2,6 @@ package p4
 
 import (
 	"fmt"
-	"os"
 	"strings"
 )
 
@@ -26,13 +25,11 @@ func (p *P4) Add(paths []string, opts ...Option) error {
 	}
 
 	// write paths to disk to avoid command line character limit
-	tmpFilePattern := "p4harmonize_add_*.txt"
-	file, err := os.CreateTemp("", tmpFilePattern)
+	fnCleanup, filename, err := WriteTempFile("p4harmonize_add_*.txt", strings.Join(paths, "\n"))
 	if err != nil {
-		return fmt.Errorf("Error creating temp file for pattern %s: %w", tmpFilePattern, err)
+		return err
 	}
-	defer os.Remove(file.Name())
-	file.WriteString(strings.Join(paths, "\n"))
+	defer fnCleanup()
 
-	return p.sh.Cmdf(`%s -x "%s" add %s -If`, p.cmd(), file.Name(), strings.Join(args, " ")).RunErr()
+	return p.sh.Cmdf(`%s -x "%s" add %s -If`, p.cmd(), filename, strings.Join(args, " ")).RunErr()
 }

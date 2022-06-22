@@ -2,12 +2,11 @@ package p4
 
 import (
 	"fmt"
-	"os"
 	"strings"
 )
 
-// Edit checks out an existing file from the depot. If your path includes any reserved
-// characters (@#%*), you need to first escape your path with EscapePath.
+// Edit checks out one or more existing file(s) from the depot. If your path includes any
+// reserved characters (@#%*), you need to first escape your path with EscapePath.
 func (p *P4) Edit(paths []string, opts ...Option) error {
 	var args []string
 	for _, o := range opts {
@@ -26,13 +25,11 @@ func (p *P4) Edit(paths []string, opts ...Option) error {
 	}
 
 	// write paths to disk to avoid command line character limit
-	tmpFilePattern := "p4harmonize_edit_*.txt"
-	file, err := os.CreateTemp("", tmpFilePattern)
+	fnCleanup, filename, err := WriteTempFile("p4harmonize_edit_*.txt", strings.Join(paths, "\n"))
 	if err != nil {
-		return fmt.Errorf("Error creating temp file for pattern %s: %w", tmpFilePattern, err)
+		return err
 	}
-	defer os.Remove(file.Name())
-	file.WriteString(strings.Join(paths, "\n"))
+	defer fnCleanup()
 
-	return p.sh.Cmdf(`%s -x "%s" edit %s`, p.cmd(), file.Name(), strings.Join(args, " ")).RunErr()
+	return p.sh.Cmdf(`%s -x "%s" edit %s`, p.cmd(), filename, strings.Join(args, " ")).RunErr()
 }

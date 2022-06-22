@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -298,4 +299,23 @@ func UnescapePath(path string) (string, error) {
 	}
 
 	return sb.String(), nil
+}
+
+// WriteTempFile creates a temporary file then writes the passed contents to that file.
+// To understand "filepattern", see the os.CreateTemp() documentation for the "pattern" argument.
+// If there is no error in creating the file, then the returned func must be called
+// when it is safe to delete the created temporary file.
+func WriteTempFile(filepattern, contents string) (fnCleanup func(), filename string, err error) {
+	// write paths to disk to avoid command line character limit
+	file, err := os.CreateTemp("", filepattern)
+	if err != nil {
+		return nil, "", fmt.Errorf("Error creating temp file for pattern %s: %w", filepattern, err)
+	}
+	fn := func() { os.Remove(file.Name()) }
+	_, err = file.WriteString(contents)
+	if err != nil {
+		return nil, "", fmt.Errorf("Error writing temp file for pattern %s: %w", filepattern, err)
+	}
+
+	return fn, file.Name(), nil
 }
