@@ -26,7 +26,8 @@ SRCFILES=`$SRC_P4 -z tag files -e //$SRC_CLIENT/... |\
   grep "... " |\
   sed -e 's/... //' |\
   sed -e 's|//UE4/Release-4.20/||' |\
-  paste -d " "  - -`
+  paste -d " "  - - |\
+  sort`
 
 DSTFILES=`$DST_P4 -z tag files -e //$DST_CLIENT/... |\
   grep -v "... time" |\
@@ -36,7 +37,8 @@ DSTFILES=`$DST_P4 -z tag files -e //$DST_CLIENT/... |\
   grep "... " |\
   sed -e 's/... //' |\
   sed -e 's|//test/engine/||' |\
-  paste -d " "  - -`
+  paste -d " "  - - |\
+  sort`
 
 if [[ "$SRCFILES" != "$DSTFILES" ]]; then
   echo "TEST FAILED: Source and Destination depots are not in sync"

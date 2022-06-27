@@ -16,7 +16,8 @@ RUN apt-get install -y helix-p4d
 # Configure perforce (we're forced to make a "secure" password here)
 
 ARG SERVER_ID
-RUN /opt/perforce/sbin/configure-helix-p4d.sh $SERVER_ID -n -p 1666 -r /p4 -u super -P super123
+ARG CASE_INSENSITIVE
+RUN /opt/perforce/sbin/configure-helix-p4d.sh $SERVER_ID -n -p 1666 -r /p4 -u super -P super123 --case $CASE_INSENSITIVE
 COPY main.conf /etc/perforce/p4dctl.conf.d/main.conf
 
 # Disable the security policy and clear the super's password (these are just tests, security is irrelevant)

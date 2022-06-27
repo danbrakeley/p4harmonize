@@ -1,4 +1,4 @@
-// +build mage
+//go:build mage
 
 package main
 
@@ -86,7 +86,7 @@ func LongTest() {
 	sh.Echo("***")
 }
 
-// TestPrep runs testDown, then testUp, then executes `test/prop.sh` to fill the servers with test data.
+// TestPrep runs testDown, then testUp, then executes `test/prep.sh` to fill the servers with test data.
 func TestPrep() {
 	mg.SerialDeps(TestDown, TestUp)
 	sh.InDir("test", func() {

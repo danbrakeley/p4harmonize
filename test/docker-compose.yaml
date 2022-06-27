@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile
       args:
         SERVER_ID: src
+        CASE_INSENSITIVE: 1
     restart: unless-stopped
     ports:
       - 1667:1666
@@ -15,6 +16,7 @@ services:
       dockerfile: Dockerfile
       args:
         SERVER_ID: dst
+        CASE_INSENSITIVE: 0
     restart: unless-stopped
     ports:
       - 1668:1666
