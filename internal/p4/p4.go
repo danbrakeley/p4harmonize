@@ -306,16 +306,17 @@ func UnescapePath(path string) (string, error) {
 // If there is no error in creating the file, then the returned func must be called
 // when it is safe to delete the created temporary file.
 func WriteTempFile(filepattern, contents string) (fnCleanup func(), filename string, err error) {
-	// write paths to disk to avoid command line character limit
 	file, err := os.CreateTemp("", filepattern)
 	if err != nil {
 		return nil, "", fmt.Errorf("Error creating temp file for pattern %s: %w", filepattern, err)
 	}
-	fn := func() { os.Remove(file.Name()) }
+	defer file.Close()
+
 	_, err = file.WriteString(contents)
 	if err != nil {
 		return nil, "", fmt.Errorf("Error writing temp file for pattern %s: %w", filepattern, err)
 	}
 
-	return fn, file.Name(), nil
+	name := file.Name()
+	return func() { os.Remove(name) }, name, nil
 }
