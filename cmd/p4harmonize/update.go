@@ -188,11 +188,19 @@ func Harmonize(log Logger, cfg Config) error {
 		}
 	}
 
+	// TODO: Is this revert necessary anymore? Is there an edge case where this might help?
+	// I'm leaving it in for now, but if there are ever any perf concerns, it can probably be removed.
 	if err := p4dst.RevertUnchanged(filepath.Join(dstClientRoot, "..."), p4.Changelist(cl)); err != nil {
 		return fmt.Errorf("Unable to revert unchanged files in the destination: %w", err)
 	}
 
+	root, err := filepath.Abs(cfg.Dst.ClientRoot)
+	if err != nil {
+		root = cfg.Dst.ClientRoot
+	}
 	log.Warning("Success! All changes are waiting in CL #%d. Please review and submit when ready.", cl)
+	log.Info("Remember to delete workspace \"%s\"", cfg.Dst.ClientName)
+	log.Info("and local folder \"%s\"", root)
 
 	return nil
 }

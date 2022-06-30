@@ -14,6 +14,7 @@ type Logger interface {
 	Info(format string, args ...interface{})
 	Verbose(format string, args ...interface{})
 	Warning(format string, args ...interface{})
+	Error(format string, args ...interface{})
 }
 
 type FrogLog struct {

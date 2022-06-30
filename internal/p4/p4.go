@@ -157,7 +157,7 @@ func (x DepotFileCaseInsensitive) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
 // and headAction.
 // The results are then sorted by Path (case-insensitive) and returned.
 func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
-	if !strings.Contains(cmd, "-ztag") && !strings.Contains(cmd, "-z tag")  && !strings.Contains(cmd, "fstat") {
+	if !strings.Contains(cmd, "-ztag") && !strings.Contains(cmd, "-z tag") && !strings.Contains(cmd, "fstat") {
 		return nil, fmt.Errorf("missing '-z tag' in non-fstat cmd: %s", cmd)
 	}
 

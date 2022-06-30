@@ -2,9 +2,9 @@
 
 ## Overview
 
-`p4harmonize` is a tool for getting the head revision of a stream on one perforce server to mirror the head revision from some other perforce server. It can reconcile files, fix differences in file name/path capitalization, fix the file type, and fix improperly checked in AppleDouble files created by the "apple" file type.
+`p4harmonize` is a tool for mirroring a stream's head revision from one perforce server to another. This includes reconciling files, fixing differences in file name/path capitalization, fixing the file type, and fixing improperly checked in %AppleDouble files.
 
-`p4harmonize` was built with Unreal Engine releases in mind, where the Epic licensee perforce server is used as the source, and a dedicated stream on a project's perforce server is used as the destination. It is intended to be used with a setup similar to [the one recommended by Epic](https://docs.unrealengine.com/4.26/en-US/ProgrammingAndScripting/ProgrammingWithCPP/DownloadingSourceCode/UpdatingSourceCode/#integrating,merging,andbranching). At Proletariat, we have different names, but the purposes are the same:
+`p4harmonize` was built with Unreal Engine source in mind, where the Epic licensee perforce server is used as the source, and a dedicated stream on a project's perforce server is used as the destination. It is intended to be used with a setup similar to [the one recommended by Epic](https://docs.unrealengine.com/4.26/en-US/ProgrammingAndScripting/ProgrammingWithCPP/DownloadingSourceCode/UpdatingSourceCode/#integrating,merging,andbranching). At Proletariat, we have different names, but the purposes are the same:
 
 name | description
 --- | ---
@@ -40,11 +40,11 @@ new_client_root = "d:/p4/local/harmonize" # this will be created by p4harmonize
 new_client_stream = "//test/engine_epic"  # this needs to already exist
 ```
 
-`p4harmonize` connects to each server, requests file lists from each, and determines what work needs to be done. If everything is already in sync, then it reports that back to the user and ends. If there is work to be done, then it creates a changelist and begins adding its fixes to it.
+`p4harmonize` connects to each server, requests file lists from each, and determines what work needs to be done. If everything is already in sync, then it quickly reports the status and stops. If there is work to be done, then it creates a changelist and begins adding its fixes to it.
 
 While it runs, it outputs status updates and every individual `p4` command it is running so you can follow along.
 
-When it is done, there will be a changelist that must be submitted by hand. This gives you an opportunity to sanity check the changes before they are committed.
+When it is done, there will be a changelist that must be submitted by hand, giving you a chance to sanity check the work.
 
 ## Runtime requirements
 
@@ -67,7 +67,7 @@ When it is done, there will be a changelist that must be submitted by hand. This
   ```text
   git clone https://github.com/proletariatgames/p4harmonize.git
   ```
-- Open a bash prompt in the created `p4harmonize` folder and run  `scripts/setup.sh`
+- Open a bash prompt in the `p4harmonize` folder that git created in the previous step and run `scripts/setup.sh`
   - This ensures Go is installed and ready
   - This builds [Mage](https://magefile.org) into your $GOPATH/bin folder
 
@@ -88,28 +88,29 @@ Targets:
 
 ### Mage usage notes
 
-- If your shell can't find `mage`, then you can try
-  - re-run `scripts/setup.sh` (or `scripts/reinstall-mage.sh`), which creates a `mage` executable in your `$GOPATH/bin`
-  - ensure you have a `$GOPATH/bin` folder, and that it has been added to your `$PATH` environment variable
+- If your shell can't find `mage`
+  - make sure your `$GOPATH/bin` folder is in your `$PATH`
+  - make sure there's a `mage` executable in your `$GOPATH/bin` folder
+  - if `mage` is missing, then re-run `scripts/setup.sh`
 - Mage targets are not case sensitive, so `mage longTest` and `mage longtest` will run the same target.
-- If you see `No .go files marked with the mage build tag in this directory`, make sure you there is a `magefile.go` in the current folder (Mage does not look to parent folders for magefiles).
 
 ## Contributing
 
-Before opening a pull request, please run `mage longtest`, which will run all tests, including functional tests that spin up two Perforce servers in Docker, populate each with some test files, then runs p4harmonize against them, and validates the results.
+Before opening a pull request, please run `mage longtest`, which spins up two Perforce servers via Docker, places test files in them, then runs p4harmonize and validates the results.
 
-Once you have a passing longtest, feel free to open a PR. Please include a quick description of the problem your PR solves in the PR description.
+Once `longtest` is passing, feel free to open a PR. Please include a quick description of the problem your PR solves in the PR description. If your PR includes performance improvements, please include benchmark numbers and an explanation of how to reproduce those numbers.
 
 ### Debugging longtest
 
-Unfortunately the specifics of `longtest` are a bit gross at the moment, and while I hope to one day have time to go in and clean things up, for now it is an all or nothing pass/fail, and so debugging often requires going in and temporarily altering it to focus on the specific behavior that is failing. See the `func LongTest()` in `magefile.go`.
+Unfortunately `longtest` is a bit gross at the moment, and while I hope to one day have time to go in and break it out into individual test cases, for now it is an all or nothing pass/fail. Debugging failures often requires temporarily altering the bash scripts and/or connecting perforce clients directly to the docker servers to find and fix the specific behavior that is failing. A good starting point is to read through `func LongTest()` in `magefile.go`.
 
 ## Special Thanks!
 
-Thanks to [Bohdon Sayre](https://github.com/bohdon) and [Jørgen P. Tjernø](https://github.com/jorgenpt) for contributing time and code to help me fix my bugs and improve performance!
+Thanks to [Bohdon Sayre](https://github.com/bohdon) and [Jørgen P. Tjernø](https://github.com/jorgenpt) for contributing time and code to help me fix my bugs and dramatically improve performance!
 
 ## TODO:
 
 - clean up output to be more readable
 - make longtest less gross to work with/debug
-- test on other platforms (only tested on Windows so far)
+- run longtest via github actions
+- test on a Mac (maybe with github actions?)
