@@ -69,8 +69,8 @@ func LongTest() {
 	target := sh.ExeName(cmd)
 
 	sh.InDir("local", func() {
-		sh.Echo("Running p4harmonize against test servers...")
-		sh.Cmdf("%s -config ../test/config.toml", target).Run()
+		sh.Echof("Running %s against test servers...", target)
+		sh.Cmdf("./%s -config ../test/config.toml", target).Run()
 	})
 	sh.InDir("test", func() {
 		sh.Echo("Submitting CL and verifying depot files in both servers match...")
@@ -91,6 +91,12 @@ func TestPrep() {
 	mg.SerialDeps(TestDown, TestUp)
 	sh.InDir("test", func() {
 		sh.Echo("Running test/prep.sh...")
+
+		// TODO: FIXME: this sleep is to avoid running prep.sh before the perforce servers are ready
+		// Ideally we'd have a test that actually confirms that the perforce servers are ready, rather
+		// then just making a race condition less likely.
+		time.Sleep(time.Second)
+
 		sh.Cmdf("./prep.sh").Bash()
 	})
 	sh.RemoveAll("./local/p4/dst")
