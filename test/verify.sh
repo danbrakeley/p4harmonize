@@ -1,20 +1,10 @@
 #!/bin/bash -e
 cd $(dirname "$0")
 
-SRC_PORT=1667
-SRC_USER=super
-SRC_CLIENT=super-UE4-Release-4.20
-
-DST_PORT=1668
-DST_USER=super
-DST_CLIENT=super-test-engine-p4harmonize
+source ./env.sh
 
 SRC_P4="p4 -p $SRC_PORT -u $SRC_USER -c $SRC_CLIENT"
 DST_P4="p4 -p $DST_PORT -u $DST_USER -c $DST_CLIENT"
-
-# commit the change left open by p4harmonize
-
-$DST_P4 submit -c 3
 
 # grab the list of files from each server and compare names and types
 
