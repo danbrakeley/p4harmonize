@@ -64,7 +64,6 @@ func Run() {
 // LongTest runs a fresh build of p4harmonize against test files in docker-hosted perforce servers.
 func LongTest() {
 	mg.SerialDeps(Build, TestPrep)
-	defer TestDown()
 
 	target := sh.ExeName(cmd)
 
@@ -84,6 +83,7 @@ func LongTest() {
 	sh.Echo("***")
 	sh.Echo("*** Integration Test Passed!")
 	sh.Echo("***")
+	TestDown()
 }
 
 // TestPrep runs testDown, then testUp, then executes `test/prep.sh` to fill the servers with test data.
