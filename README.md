@@ -12,6 +12,10 @@ name | description
 `//proj/engine_merge` | dedicated space for a human to merge main with new engine drops; ideally QA will sign off on a build from this branch before the merged engine changes are brought to main
 `//proj/main` | our mainline; lots of people work here, so a broken build can be very costly
 
+## Case-sensitivity
+
+As of v0.4.0, `p4harmonize` is doesn't support a destination Perforce server that is set to case-insensitive. If you'd like to help investigate and fix the issues around case-insesnsitive servers, then the best place to start is to run `mage longtest` and ensure it passes, then edit `test/docker-compose.yaml` to set the `p4dst` server's `CASE_INSENSITIVE` arg to `1`, and run `mage longtest` again, and now it should fail.
+
 ## Install
 
 You can download the latest Windows executable from the [releases page](https://github.com/proletariatgames/p4harmonize/releases), or you can build it yourself.
@@ -110,7 +114,8 @@ Thanks to [Bohdon Sayre](https://github.com/bohdon) and [Jørgen P. Tjernø](htt
 
 ## TODO:
 
+- fix issues with case-insensitive destination servers
 - clean up output to be more readable
 - make longtest less gross to work with/debug
-- run longtest via github actions
+- run longtest via github actions?
 - test on a Mac (maybe with github actions?)
