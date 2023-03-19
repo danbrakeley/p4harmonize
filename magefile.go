@@ -84,7 +84,7 @@ func TestPrep() {
 
 		// TODO: FIXME: This sleep is to reduce the chance of a race condition where prep.sh runs before
 		// the perforce servers are actually accepting connections. I've only seen this issue on linux
-		// (which was running in Windows via VMWare), and it was inconcsistent.
+		// (which was running in Windows via VMWare), and it was inconsistent.
 		// Ideally there would be some check we could make here instead of just waiting and hoping.
 		time.Sleep(time.Second)
 
