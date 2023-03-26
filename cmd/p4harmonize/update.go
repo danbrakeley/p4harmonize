@@ -18,6 +18,21 @@ type srcThreadResults struct {
 }
 
 func Harmonize(log Logger, cfg Config) error {
+	var chSrc chan srcThreadResults
+	defer func() {
+		// TODO: This is a quick hack to ensure the sync thread isn't left dangling due to returning early, but
+		// ideally we'd have a solution that is less prone to drift between this code and the function body.
+		if chSrc != nil {
+			log.Warning("Something went wrong, but waiting for thread to complete before handling the error...")
+			str := <-chSrc
+			if str.Error != nil {
+				log.Error("Thread also had an error: %v", str.Error)
+			} else {
+				log.Info("Thread finished without error.")
+			}
+		}
+	}()
+
 	var err error
 
 	// Ensure dst root folder and dst client don't already exist
@@ -29,16 +44,22 @@ func Harmonize(log Logger, cfg Config) error {
 	// Start sync from src in the background
 
 	logSrc := log.MakeChildLogger("source")
-	chSrc := make(chan srcThreadResults)
+	chSrc = make(chan srcThreadResults)
 	go func() {
 		defer close(chSrc)
 		chSrc <- srcSyncAndList(logSrc, cfg)
 	}()
 
-	// Create dst client
+	// Grab dst info and create dst client
 
 	sh := MakeLoggingBsh(log)
 	p4dst := p4.New(sh, cfg.Dst.P4Port, cfg.Dst.P4User, "")
+
+	log.Info("Retrieving info for server %s", p4dst.DisplayName())
+	info, err := p4dst.Info()
+	if err != nil {
+		return fmt.Errorf("Failed getting info from server %s: %w", p4dst.DisplayName(), err)
+	}
 
 	log.Info("Creating client %s on %s...", cfg.Dst.ClientName, p4dst.DisplayName())
 
@@ -46,8 +67,8 @@ func Harmonize(log Logger, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("Failed to create client %s: %w", p4dst.Client, err)
 	}
-	// rebuild p4dst to include the new client and stream
-	p4dst = p4.New(sh, cfg.Dst.P4Port, cfg.Dst.P4User, cfg.Dst.ClientName)
+	// set p4dst's client and stream name
+	p4dst.Client = cfg.Dst.ClientName
 	err = p4dst.SetStreamName(cfg.Dst.ClientStream)
 	if err != nil {
 		return err
@@ -73,6 +94,7 @@ func Harmonize(log Logger, cfg Config) error {
 
 	// block until sync source sync completes
 	str := <-chSrc
+	chSrc = nil
 	if str.Error != nil {
 		return fmt.Errorf("Failed in source thread: %w", str.Error)
 	}
