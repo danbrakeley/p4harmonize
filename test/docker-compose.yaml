@@ -20,3 +20,13 @@ services:
     restart: unless-stopped
     ports:
       - 1668:1666
+  p4dst_ins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVER_ID: dst_ins
+        CASE_INSENSITIVE: 1
+    restart: unless-stopped
+    ports:
+      - 1669:1666

@@ -3,8 +3,8 @@ cd $(dirname "$0")
 
 source ./env.sh
 
-SRC_P4="p4 -p $SRC_PORT -u $SRC_USER -c $SRC_CLIENT"
-DST_P4="p4 -p $DST_PORT -u $DST_USER -c $DST_CLIENT"
+SRC_P4="p4 -p $1 -u $SRC_USER -c $SRC_CLIENT"
+DST_P4="p4 -p $2 -u $DST_USER -c $DST_CLIENT"
 
 # grab the list of files from each server and compare names and types
 
