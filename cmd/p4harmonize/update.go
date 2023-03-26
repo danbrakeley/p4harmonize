@@ -93,22 +93,27 @@ func Harmonize(log Logger, cfg Config) error {
 	}
 
 	// block until sync source sync completes
-	str := <-chSrc
+	srcRes := <-chSrc
 	chSrc = nil
-	if str.Error != nil {
-		return fmt.Errorf("Failed in source thread: %w", str.Error)
+	if srcRes.Error != nil {
+		return fmt.Errorf("Failed in source thread: %w", srcRes.Error)
+	}
+
+	if !sh.IsDir(srcRes.ClientRoot) {
+		return fmt.Errorf("Client root '%s' is missing or is not a folder", srcRes.ClientRoot)
 	}
 
 	log.Info("Reconciling file lists from source and destination...")
-
-	if !sh.IsDir(str.ClientRoot) {
-		return fmt.Errorf("Client root '%s' is missing or is not a folder", str.ClientRoot)
+	var diff DepotFileDiff
+	switch info.CaseHandling {
+	case p4.CaseInsensitive:
+		diff = Reconcile(srcRes.Files, dstFiles, DstIsCaseInsensitive)
+	default:
+		diff = Reconcile(srcRes.Files, dstFiles)
 	}
 
-	diff := Reconcile(str.Files, dstFiles)
-
 	// early out if there's nothing to reconcile
-	if !diff.HasDifference {
+	if !diff.HasDifference() {
 		log.Info("All files in source and destination already match, so no harmonizing necessary.")
 		log.Info("Removing unused client...")
 		err := p4dst.DeleteClient(p4dst.Client)
@@ -132,13 +137,28 @@ func Harmonize(log Logger, cfg Config) error {
 		return fmt.Errorf("Unable to get absolute path for '%s': %w", cfg.Dst.ClientRoot, err)
 	}
 
+	var pathsToDelete []string
+
 	// For each file that only exists in the destination, mark it for delete in the destination.
 	// NOTE: Process DstOnly BEFORE processing Match, so that any AppleDouble "%" files that
 	// got checked directly into the destination are cleaned up properly.
-	var pathsToDelete []string
+	pathsToDelete = make([]string, 0, len(diff.DstOnly)+len(diff.CaseMismatch))
 	for _, dst := range diff.DstOnly {
 		dstPath := filepath.Join(dstClientRoot, dst.Path)
 		pathsToDelete = append(pathsToDelete, dstPath)
+	}
+	// NOTE: If the dst server is case insensitive, also delete any files with case mismatches in their paths.
+	if len(diff.CaseMismatch) > 0 {
+		log.Warning("Files with case problems detected, but the destination server is set to case insensitive mode. " +
+			"Perforce cannot fix case issues on a case insensitive server in a single pass. " +
+			"When p4harmonize completes, there will be a changelist that deletes files with " +
+			"casing issues. After that CL is submitted, please re-run p4harmonize, which will " +
+			"re-add the deleted files, but with correct casing." +
+			"See https://portal.perforce.com/s/article/3448 for more details.")
+		for _, dst := range diff.CaseMismatch {
+			dstPath := filepath.Join(dstClientRoot, dst[1].Path)
+			pathsToDelete = append(pathsToDelete, dstPath)
+		}
 	}
 	if err := p4dst.Delete(pathsToDelete, p4.Changelist(cl)); err != nil {
 		return fmt.Errorf("Unable to mark %d file(s) for delete: %w", len(pathsToDelete), err)
@@ -152,7 +172,7 @@ func Harmonize(log Logger, cfg Config) error {
 		var pathsToEdit []string
 
 		for _, pair := range diffFiles {
-			srcPath := filepath.Join(str.ClientRoot, pair[0].Path)
+			srcPath := filepath.Join(srcRes.ClientRoot, pair[0].Path)
 			dstPathNew := filepath.Join(dstClientRoot, pair[0].Path)
 			dstPathOld := filepath.Join(dstClientRoot, pair[1].Path)
 
@@ -188,7 +208,7 @@ func Harmonize(log Logger, cfg Config) error {
 		var pathsToAdd []string
 
 		for _, src := range srcFiles {
-			srcPath := filepath.Join(str.ClientRoot, src.Path)
+			srcPath := filepath.Join(srcRes.ClientRoot, src.Path)
 			dstPath := filepath.Join(dstClientRoot, src.Path)
 
 			// copy file from source root to destination root
@@ -210,8 +230,9 @@ func Harmonize(log Logger, cfg Config) error {
 		}
 	}
 
-	// TODO: Is this revert necessary anymore? Is there an edge case where this might help?
-	// I'm leaving it in for now, but if there are ever any perf concerns, it can probably be removed.
+	// TODO: Do we ALWAYS need to do this? There is a note in the digest code that suggests that
+	// sometimes digests may not be available, in which case this revert is necessary.
+	// Is that the only case? If so, can we explicitly detect that, and only do this in that case?
 	if err := p4dst.RevertUnchanged(filepath.Join(dstClientRoot, "..."), p4.Changelist(cl)); err != nil {
 		return fmt.Errorf("Unable to revert unchanged files in the destination: %w", err)
 	}
@@ -220,6 +241,7 @@ func Harmonize(log Logger, cfg Config) error {
 	if err != nil {
 		root = cfg.Dst.ClientRoot
 	}
+
 	log.Warning("Success! All changes are waiting in CL #%d. Please review and submit when ready.", cl)
 	log.Info("Remember to delete workspace \"%s\"", cfg.Dst.ClientName)
 	log.Info("and local folder \"%s\"", root)
@@ -328,13 +350,36 @@ func MakeLoggingBsh(log Logger) *bsh.Bsh {
 }
 
 type DepotFileDiff struct {
-	HasDifference bool
-	Match         [][2]p4.DepotFile // Types and paths are an exact match
-	SrcOnly       []p4.DepotFile    // Path only exists in source
-	DstOnly       []p4.DepotFile    // Path only exists in destination
+	Match   [][2]p4.DepotFile // Paths match, but type, case, or content may not (see CaseMismatch below for exceptions).
+	SrcOnly []p4.DepotFile    // Path only exists in source
+	DstOnly []p4.DepotFile    // Path only exists in destination
+
+	// When the dst server is in case insensitive mode, any case mismatches must be handled specially.
+	// In this case, Match will not list files that have case mismatches in their path, and instead
+	// those files will only be listed here in CaseMismatch.
+	CaseMismatch [][2]p4.DepotFile
 }
 
-func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
+// HasDifference returns true if this struct contains any differences at all
+func (d *DepotFileDiff) HasDifference() bool {
+	return len(d.Match) > 0 || len(d.SrcOnly) > 0 || len(d.DstOnly) > 0 || len(d.CaseMismatch) > 0
+}
+
+type ReconcileOption uint8
+
+const (
+	DstIsCaseInsensitive ReconcileOption = iota // case insensitive dst servers need special handling of casing issues
+)
+
+func Reconcile(src []p4.DepotFile, dst []p4.DepotFile, opts ...ReconcileOption) DepotFileDiff {
+	// parse options
+	dstIsCaseInsensitive := false
+	for _, v := range opts {
+		if v == DstIsCaseInsensitive {
+			dstIsCaseInsensitive = true
+		}
+	}
+
 	max := len(src)
 	if len(dst) > max {
 		max = len(dst)
@@ -346,6 +391,10 @@ func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
 		DstOnly: make([]p4.DepotFile, 0, max),
 	}
 
+	if dstIsCaseInsensitive {
+		out.CaseMismatch = make([][2]p4.DepotFile, 0, max)
+	}
+
 	is, id := 0, 0
 	for is < len(src) && id < len(dst) {
 		srcCmp := strings.ToLower(src[is].Path)
@@ -354,35 +403,38 @@ func Reconcile(src []p4.DepotFile, dst []p4.DepotFile) DepotFileDiff {
 		switch {
 		case cmp == 0:
 			caseDifference := src[is].Path != dst[id].Path
-			typeDifference := src[is].Type != dst[id].Type
-			// If we don't have a digest, assume it's different (since we'll use `p4 revert -a`),
-			// otherwise compare digests to see if there's a difference.
-			contentDifference := len(src[is].Digest) == 0 || src[is].Digest != dst[id].Digest
-			if caseDifference || typeDifference || contentDifference {
-				out.Match = append(out.Match, [2]p4.DepotFile{src[is], dst[id]})
-				out.HasDifference = true
+			// A dst server that is case insensitive will need special handling to fix case issues.
+			if dstIsCaseInsensitive && caseDifference {
+				out.CaseMismatch = append(out.CaseMismatch, [2]p4.DepotFile{src[is], dst[id]})
+				// Case mismatch will be handled by deleting the dst file, and requesting the user to
+				// run a second pass to get it re-added with the proper case.
+				// So we don't need to know anything else about this file right now.
+			} else {
+				typeDifference := src[is].Type != dst[id].Type
+				// If we don't have a digest, assume it's different (since we'll use `p4 revert -a` to
+				// cleanup at the end), otherwise compare digests to see if there's a difference.
+				contentDifference := len(src[is].Digest) == 0 || src[is].Digest != dst[id].Digest
+				if caseDifference || typeDifference || contentDifference {
+					out.Match = append(out.Match, [2]p4.DepotFile{src[is], dst[id]})
+				}
 			}
 			is++
 			id++
 		case cmp < 0:
 			out.SrcOnly = append(out.SrcOnly, src[is])
-			out.HasDifference = true
 			is++
 		case cmp > 0:
 			out.DstOnly = append(out.DstOnly, dst[id])
-			out.HasDifference = true
 			id++
 		}
 	}
 
-	for i := is; i < len(src); i++ {
-		out.SrcOnly = append(out.SrcOnly, src[i])
-		out.HasDifference = true
+	if is < len(src) {
+		out.SrcOnly = append(out.SrcOnly, src[is:]...)
 	}
 
-	for i := id; i < len(dst); i++ {
-		out.DstOnly = append(out.DstOnly, dst[i])
-		out.HasDifference = true
+	if id < len(dst) {
+		out.DstOnly = append(out.DstOnly, dst[id:]...)
 	}
 
 	return out
