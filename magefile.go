@@ -55,26 +55,21 @@ func Run() {
 
 // LongTest runs a fresh build of p4harmonize against test files in docker-hosted perforce servers.
 func LongTest() {
-	mg.SerialDeps(Build, TestUp)
-
-	// TODO: FIXME: This sleep is to reduce the chance of a race condition where prep.sh runs before
-	// the perforce servers are actually accepting connections. I've only seen this issue on linux
-	// (which was running in Windows via VMWare), and it was inconsistent.
-	// Ideally there would be some check we could make here instead of just waiting and hoping.
-	time.Sleep(time.Second)
+	mg.SerialDeps(Build, TestDown, TestUp)
 
 	sh.Cmdf("go run ./cmd/longtest/main.go").Run()
 
 	sh.Echo("***")
 	sh.Echo("*** Integration Test Passed!")
 	sh.Echo("***")
+
 	TestDown()
 }
 
 // TestUp brings up fresh perforce servers via Docker, each with a super user named "super" (no password).
 func TestUp() {
 	sh.InDir("test", func() {
-		sh.Echo("Bringing up test perforce servers: src on 1667, case sensitive dst on 1668 and case insensitive dst on 1669...")
+		sh.Echo("Bringing up test perforce servers (see test/docker-compose.yaml for details)...")
 		sh.Cmdf("docker compose up --detach --force-recreate --build").Run()
 	})
 }
