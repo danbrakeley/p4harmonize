@@ -9,6 +9,7 @@ import (
 
 	"github.com/danbrakeley/frog"
 	"github.com/proletariatgames/p4harmonize/internal/buildvar"
+	"github.com/proletariatgames/p4harmonize/internal/config"
 )
 
 func PrintUsage() {
@@ -100,7 +101,7 @@ func mainExit() int {
 		log.Close()
 	}()
 
-	cfg, err := loadConfigFromFile(cfgPath)
+	cfg, err := config.LoadFromFile(cfgPath)
 	if err != nil {
 		log.Error("Failed to load config: %v", err)
 		return 1

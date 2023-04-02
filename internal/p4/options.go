@@ -42,3 +42,21 @@ type oKeep struct{}
 
 func (_ oKeep) isOption()      {}
 func (_ oKeep) String() string { return "Keep" }
+
+// Do not perform any ignore checking, i.e. ignore any settings specified by P4IGNORE.
+
+var DoNotIgnore oDoNotIgnore
+
+type oDoNotIgnore struct{}
+
+func (_ oDoNotIgnore) isOption()      {}
+func (_ oDoNotIgnore) String() string { return "DoNotIgnore" }
+
+// Allow wildcards in file names (see [p4 add](https://www.perforce.com/manuals/cmdref/Content/CmdRef/p4_add.html))
+
+var AllowWildcards oAllowWildcards
+
+type oAllowWildcards struct{}
+
+func (_ oAllowWildcards) isOption()      {}
+func (_ oAllowWildcards) String() string { return "AllowWildcards" }
