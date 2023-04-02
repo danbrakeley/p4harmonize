@@ -1,5 +1,9 @@
 # p4harmonize
 
+## Important Updates
+
+- As of v0.5.0, bash will no longer be required to run p4harmonize on Windows!
+
 ## Overview
 
 `p4harmonize` is a tool for mirroring a stream's head revision from one perforce server to another. This includes reconciling files, fixing differences in file name/path capitalization, fixing the file type, and fixing improperly checked in %AppleDouble files.
@@ -14,7 +18,7 @@ name | description
 
 ## Case-sensitivity
 
-As of v0.4.0, `p4harmonize` is doesn't support a destination Perforce server that is set to case-insensitive. If you'd like to help investigate and fix the issues around case-insesnsitive servers, then the best place to start is to run `mage longtest` and ensure it passes, then edit `test/docker-compose.yaml` to set the `p4dst` server's `CASE_INSENSITIVE` arg to `1`, and run `mage longtest` again, and now it should fail.
+Perforce servers can run in case sensitive or case insensitive modes. When the destination server is running in case insensitive mode, file casing issues can't be fixed with a single move command, and instead must first be deleted, then re-added with the correct case. `p4harmonize` supports doing this work, however it requires the user to run `p4harmonize` twice. If you end up in this situation, `p4harmonize` will explain what to do as the first run finishes.
 
 ## Install
 
@@ -48,16 +52,15 @@ new_client_stream = "//test/engine_epic"  # this needs to already exist
 
 While it runs, it outputs status updates and every individual `p4` command it is running so you can follow along.
 
-When it is done, there will be a changelist that must be submitted by hand, giving you a chance to sanity check the work.
+When it is done, there will be a changelist that must be submitted by hand, giving you a chance to verify the work.
+
+`p4harmonize` will never submit a changelist on its own.
 
 ## Runtime requirements
 
 `p4harmonize` requires the following commands to be in your path:
 
 - `p4`/`p4.exe`, aka the [Helix Command-Line Client](https://www.perforce.com/downloads/helix-command-line-client-p4)
-- `bash`
-  - On Mac/Linux, this comes standard
-  - On Windows, I recommend git-bash, which is included in [Git for Windows](https://gitforwindows.org).
 
 ## Development setup
 
@@ -85,9 +88,8 @@ Targets:
   build       tests and builds the app (output goes to "local" folder)
   longTest    runs a fresh build of p4harmonize against test files in docker-hosted perforce servers.
   run         runs unit tests, builds, and runs the app
-  testDown    brings down and removes the docker contains started by TestUp.
-  testPrep    runs testDown, then testUp, then executes `test/prop.sh` to fill the servers with test data.
-  testUp      brings up two empty perforce servers via Docker, listening on ports 1667 and 1668, with a single super user named "super" (no password).
+  testDown    brings down and removes the docker containers started by TestUp.
+  testUp      brings up fresh perforce servers via Docker, each with a super user named "super" (no password).
 ```
 
 ### Mage usage notes
@@ -100,13 +102,9 @@ Targets:
 
 ## Contributing
 
-Before opening a pull request, please run `mage longtest`, which spins up two Perforce servers via Docker, places test files in them, then runs p4harmonize and validates the results.
+Before opening a pull request, please run `mage longtest` and make sure it is passing.
 
-Once `longtest` is passing, feel free to open a PR. Please include a quick description of the problem your PR solves in the PR description. If your PR includes performance improvements, please include benchmark numbers and an explanation of how to reproduce those numbers.
-
-### Debugging longtest
-
-Unfortunately `longtest` is a bit gross at the moment, and while I hope to one day have time to go in and break it out into individual test cases, for now it is an all or nothing pass/fail. Debugging failures often requires temporarily altering the bash scripts and/or connecting perforce clients directly to the docker servers to find and fix the specific behavior that is failing. A good starting point is to read through `func LongTest()` in `magefile.go`.
+If your PR includes performance improvements, please include some benchmarks that show the benefits of your changes.
 
 ## Special Thanks!
 
@@ -114,8 +112,6 @@ Thanks to [Bohdon Sayre](https://github.com/bohdon) and [Jørgen P. Tjernø](htt
 
 ## TODO:
 
-- fix issues with case-insensitive destination servers
 - clean up output to be more readable
-- make longtest less gross to work with/debug
 - run longtest via github actions?
 - test on a Mac (maybe with github actions?)
