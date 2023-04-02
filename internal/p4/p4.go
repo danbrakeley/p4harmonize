@@ -25,8 +25,8 @@ type P4 struct {
 	streamDepthCache int    // read/write requires mutex lock
 }
 
-func New(sh *bsh.Bsh, port, user, client string) P4 {
-	return P4{
+func New(sh *bsh.Bsh, port, user, client string) *P4 {
+	return &P4{
 		Port:   port,
 		User:   user,
 		Client: client,

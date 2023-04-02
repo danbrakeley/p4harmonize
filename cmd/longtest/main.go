@@ -19,21 +19,12 @@ import (
 	"github.com/proletariatgames/p4harmonize/internal/p4"
 )
 
-// var sh = &bsh.Bsh{}
-
-const (
-	USER = "super"
-
-	SRC_DEPOT  = "UE4"
-	SRC_STREAM = "Release-4.20"
-	SRC_ROOT   = "local/p4/src"
-
-	DST_DEPOT  = "test"
-	DST_STREAM = "engine"
-	DST_ROOT   = "local/p4/dst"
-
-	DST_INS_ROOT = "local/p4/dst_ins"
-)
+var Servers = []Server{
+	{Src, 1661, "super", "UE4", "Release-4.20", "./p4/1"},
+	{Src, 1662, "super", "UE4", "Release-4.20", "./p4/2"},
+	{Dst, 1663, "super", "test", "engine", "./p4/3"},
+	{Dst, 1664, "super", "test", "engine", "./p4/4"},
+}
 
 func main() {
 	status := mainExit()
@@ -51,178 +42,144 @@ func mainExit() int {
 	defer log.Close()
 
 	// start := time.Now()
-	log.Info("----- longtest begin!")
+
+	// SETUP
 
 	func() {
-		log.Info("Populating perforce servers at 1667, 1668, and 1669 with test data...")
-
-		var logs [3]frog.Logger
-		logs[0] = frog.AddAnchor(log)
-		defer frog.RemoveAnchor(logs[0])
-		logs[1] = frog.AddAnchor(log)
-		defer frog.RemoveAnchor(logs[1])
-		logs[2] = frog.AddAnchor(log)
-		defer frog.RemoveAnchor(logs[2])
+		log.Info(fmt.Sprintf("Populating %d perforce servers with test data...", len(Servers)))
 
 		var wg sync.WaitGroup
-		wg.Add(3)
+		wg.Add(len(Servers))
 
-		go func(log frog.Logger) {
-			defer wg.Done()
-			close, sh := frogBsh(log)
-			defer close()
-			p4src := p4.New(sh, "1667", USER, "")
-			setupSrc(sh, &p4src, SRC_ROOT)
-			log.Info("Server 1667 ready")
-		}(logs[0])
-
-		go func(log frog.Logger) {
-			defer wg.Done()
-			close, sh := frogBsh(log)
-			defer close()
-			p4dst := p4.New(sh, "1668", USER, "")
-			setupDst(sh, &p4dst, DST_ROOT)
-			log.Info("Server 1668 ready")
-		}(logs[1])
-
-		go func(log frog.Logger) {
-			defer wg.Done()
-			close, sh := frogBsh(log)
-			defer close()
-			p4dst_ins := p4.New(sh, "1669", USER, "")
-			setupDst(sh, &p4dst_ins, DST_INS_ROOT)
-			log.Info("Server 1669 ready")
-		}(logs[2])
+		for _, v := range Servers {
+			l := frog.AddAnchor(log)
+			defer frog.RemoveAnchor(l)
+			go func(log frog.Logger, s Server) {
+				defer wg.Done()
+				close, sh := frogBsh(log)
+				defer close()
+				pf := p4.New(sh, s.Port(), s.User(), "")
+				if s.IsSrc() {
+					setupSrc(sh, pf, s)
+				} else {
+					setupDst(sh, pf, s)
+				}
+				log.Info(fmt.Sprintf("Server %d ready", s.PortInt()))
+			}(l, v)
+		}
 
 		wg.Wait()
 	}()
 
 	sh := &bsh.Bsh{}
+	sh.SetVerbose(true)
+
+	// on Windows you need a .exe at the end
+	p4harmonize := sh.ExeName("p4harmonize")
+
 	testFailure := false
 
-	func() {
-		log.Info("Running p4harmonize from 1667 to 1668...")
-		sh.SetVerbose(true)
+	// RUN P4HARMONIZE
 
-		// on Windows you need a .exe at the end
-		p4harmonize := sh.ExeName("p4harmonize")
+	func(src, dst Server) {
+		log.Info(fmt.Sprintf("Running p4harmonize from %d to %d...", src.PortInt(), dst.PortInt()))
+
+		cfgName := fmt.Sprintf("longtest_%d_%d.toml", src.PortInt(), dst.PortInt())
 
 		sh.InDir("local", func() {
-			sh.RemoveAll("p4/dst")
-			sh.Must(WriteConfig("longtest.toml", 1668, "./p4/dst"))
-			sh.Cmdf(`./%s -config longtest.toml`, p4harmonize).Run()
+			// dst's client must not already exist
+			sh.Must(p4.New(sh, dst.Port(), dst.User(), "").DeleteClient(dst.Client()))
+			// dst's root folder must be empty
+			sh.RemoveAll(dst.Root())
+
+			// write p4harmonize config and run
+			sh.Must(WriteConfig(cfgName, src, dst))
+			sh.Cmdf(`./%s -config %s`, p4harmonize, cfgName).Run()
 		})
 
-		p4src := p4.New(sh, "1667", USER, fmt.Sprintf("%s-%s-%s", USER, SRC_DEPOT, SRC_STREAM))
-		p4dst := p4.New(sh, "1668", USER, fmt.Sprintf("%s-%s-%s-p4harmonize", USER, DST_DEPOT, DST_STREAM))
+		p4src := p4.New(sh, src.Port(), src.User(), src.Client())
+		p4dst := p4.New(sh, dst.Port(), dst.User(), dst.Client())
 
 		// submit p4harmonize's changes
 		sh.Must(p4dst.SubmitChangelist(3))
 
-		// grab list of files from both servers
-		getFilesAsString := func(pf *p4.P4) string {
-			files, err := pf.ListDepotFiles()
-			sh.Must(err)
-			sort.Sort(p4.DepotFileCaseInsensitive(files))
-			var sb strings.Builder
-			sb.Grow(32 * 1024)
-			for _, v := range files {
-				sb.WriteString("   ")
-				sb.WriteString(v.Path)
-				sb.WriteString("   #")
-				sb.WriteString(v.Type)
-				sb.WriteString("\n")
-			}
-			return sb.String()
-		}
+		log.Info(fmt.Sprintf("Verifying depot files from %d and %d match...", src.PortInt(), dst.PortInt()))
+		srcFiles, dstFiles, err := BuildDepotFilesLists(p4src, p4dst)
+		sh.Must(err)
 
-		src := getFilesAsString(&p4src)
-		dst := getFilesAsString(&p4dst)
-
-		if src != dst {
+		if srcFiles != dstFiles {
 			sh.Warn("TEST FAILED: Source and Destination depots are not in sync")
 			sh.Warn(" --SOURCE--")
-			sh.Warn(src)
-			sh.Warn(" --DUSTINATION--")
-			sh.Warn(dst)
+			sh.Warn(srcFiles)
+			sh.Warn(" --DESTINATION--")
+			sh.Warn(dstFiles)
 			testFailure = true
+		} else {
+			log.Info("All depot files casing and type match!")
 		}
 
-	}()
+	}(Servers[0], Servers[2])
 
 	if testFailure {
 		return 1
 	}
 
-	func() {
-		log.Info("Running p4harmonize from 1667 to 1669...")
-		sh.SetVerbose(true)
+	func(src, dst Server) {
+		log.Info(fmt.Sprintf("Running p4harmonize from %d to %d...", src.PortInt(), dst.PortInt()))
 
-		// on Windows you need a .exe at the end
-		p4harmonize := sh.ExeName("p4harmonize")
+		cfgName := fmt.Sprintf("longtest_%d_%d.toml", src.PortInt(), dst.PortInt())
 
 		sh.InDir("local", func() {
-			sh.RemoveAll("p4/dst_ins")
-			sh.Must(WriteConfig("longtest.toml", 1669, "./p4/dst_ins"))
-			sh.Cmdf(`./%s -config longtest.toml`, p4harmonize).Run()
+			// dst's client must not already exist
+			sh.Must(p4.New(sh, dst.Port(), dst.User(), "").DeleteClient(dst.Client()))
+			// dst's root folder must be empty
+			sh.RemoveAll(dst.Root())
+
+			// write p4harmonize config and run
+			sh.Must(WriteConfig(cfgName, src, dst))
+			sh.Cmdf(`./%s -config %s`, p4harmonize, cfgName).Run()
 		})
 
-		p4src := p4.New(sh, "1667", USER, fmt.Sprintf("%s-%s-%s", USER, SRC_DEPOT, SRC_STREAM))
-		p4dst := p4.New(sh, "1669", USER, fmt.Sprintf("%s-%s-%s-p4harmonize", USER, DST_DEPOT, DST_STREAM))
+		p4src := p4.New(sh, src.Port(), src.User(), src.Client())
+		p4dst := p4.New(sh, dst.Port(), dst.User(), dst.Client())
 
 		// submit p4harmonize's changes
 		sh.Must(p4dst.SubmitChangelist(3))
-
-		{
-			p4tmp := p4.New(sh, "1669", USER, "")
-			sh.Must(p4tmp.DeleteClient(p4dst.Client))
-		}
 
 		// second pass
 		sh.InDir("local", func() {
-			sh.RemoveAll("p4/dst_ins")
-			sh.Cmdf(`./%s -config longtest.toml`, p4harmonize).Run()
+			// dst's client must not already exist
+			sh.Must(p4.New(sh, dst.Port(), dst.User(), "").DeleteClient(dst.Client()))
+			// dst's root folder must be empty
+			sh.RemoveAll(dst.Root())
+
+			// re-run p4harmonize
+			sh.Cmdf(`./%s -config %s`, p4harmonize, cfgName).Run()
 		})
 
-		// submit p4harmonize's changes
+		// submit p4harmonize's additional changes
 		sh.Must(p4dst.SubmitChangelist(4))
 
-		// grab list of files from both servers
-		getFilesAsString := func(pf *p4.P4) string {
-			files, err := pf.ListDepotFiles()
-			sh.Must(err)
-			sort.Sort(p4.DepotFileCaseInsensitive(files))
-			var sb strings.Builder
-			sb.Grow(32 * 1024)
-			for _, v := range files {
-				sb.WriteString("   ")
-				sb.WriteString(v.Path)
-				sb.WriteString("   #")
-				sb.WriteString(v.Type)
-				sb.WriteString("\n")
-			}
-			return sb.String()
-		}
+		log.Info(fmt.Sprintf("Verifying depot files from %d and %d match...", src.PortInt(), dst.PortInt()))
+		srcFiles, dstFiles, err := BuildDepotFilesLists(p4src, p4dst)
+		sh.Must(err)
 
-		src := getFilesAsString(&p4src)
-		dst := getFilesAsString(&p4dst)
-
-		if src != dst {
+		if srcFiles != dstFiles {
 			sh.Warn("TEST FAILED: Source and Destination depots are not in sync")
 			sh.Warn(" --SOURCE--")
-			sh.Warn(src)
-			sh.Warn(" --DUSTINATION--")
-			sh.Warn(dst)
+			sh.Warn(srcFiles)
+			sh.Warn(" --DESTINATION--")
+			sh.Warn(dstFiles)
 			testFailure = true
+		} else {
+			log.Info("All depot files casing and type match!")
 		}
 
-	}()
+	}(Servers[1], Servers[3])
 
 	if testFailure {
 		return 1
 	}
-
-	log.Info("----- success!")
 
 	return 0
 }
@@ -254,14 +211,73 @@ func frogBsh(log frog.Logger) (close func(), sh *bsh.Bsh) {
 	return
 }
 
-func setupSrc(sh *bsh.Bsh, pf *p4.P4, srcRoot string) {
-	sh.Must(pf.CreateStreamDepot(SRC_DEPOT))
-	sh.Must(pf.CreateMainlineStream(SRC_DEPOT, SRC_STREAM))
-	client := fmt.Sprintf("%s-%s-%s", USER, SRC_DEPOT, SRC_STREAM)
-	stream := fmt.Sprintf("//%s/%s", SRC_DEPOT, SRC_STREAM)
-	sh.Must(pf.CreateStreamClient(client, srcRoot, stream))
+type ServerType uint8
 
-	pf.Client = client
+const (
+	Src ServerType = iota
+	Dst ServerType = iota
+)
+
+type Server struct {
+	t      ServerType
+	port   int
+	user   string
+	depot  string
+	stream string
+	root   string
+}
+
+func (s *Server) IsSrc() bool {
+	return s.t == Src
+}
+
+func (s *Server) IsDst() bool {
+	return s.t == Dst
+}
+
+func (s *Server) Port() string {
+	return strconv.Itoa(s.port)
+}
+
+func (s *Server) PortInt() int {
+	return s.port
+}
+
+func (s *Server) User() string {
+	return s.user
+}
+
+// depot name, e.g. "UE4"
+func (s *Server) Depot() string {
+	return s.depot
+}
+
+// stream name, e.g. "Release-4.20"
+func (s *Server) StreamName() string {
+	return s.stream
+}
+
+// fulll stream path, e.g. "//UE4/Release-4.20"
+func (s *Server) StreamPath() string {
+	return fmt.Sprintf("//%s/%s", s.depot, s.stream)
+}
+
+func (s *Server) Root() string {
+	return s.root
+}
+
+func (s *Server) Client() string {
+	return fmt.Sprintf("%s-%s-%s", s.user, s.depot, s.stream)
+}
+
+func setupSrc(sh *bsh.Bsh, pf *p4.P4, src Server) {
+	sh.Must(pf.CreateStreamDepot(src.Depot()))
+	sh.Must(pf.CreateMainlineStream(src.Depot(), src.StreamName()))
+	stream := fmt.Sprintf("//%s/%s", src.Depot(), src.StreamName())
+	srcRoot := filepath.Join("local", src.Root())
+	sh.Must(pf.CreateStreamClient(src.Client(), srcRoot, stream))
+
+	pf.Client = src.Client()
 	cl, err := pf.CreateEmptyChangelist("longtest")
 	sh.Must(err)
 
@@ -289,14 +305,14 @@ func setupSrc(sh *bsh.Bsh, pf *p4.P4, srcRoot string) {
 	sh.Must(pf.SubmitChangelist(cl))
 }
 
-func setupDst(sh *bsh.Bsh, pf *p4.P4, dstRoot string) {
-	sh.Must(pf.CreateStreamDepot(DST_DEPOT))
-	sh.Must(pf.CreateMainlineStream(DST_DEPOT, DST_STREAM))
-	client := fmt.Sprintf("%s-%s-%s", USER, DST_DEPOT, DST_STREAM)
-	stream := fmt.Sprintf("//%s/%s", DST_DEPOT, DST_STREAM)
-	sh.Must(pf.CreateStreamClient(client, dstRoot, stream))
+func setupDst(sh *bsh.Bsh, pf *p4.P4, dst Server) {
+	sh.Must(pf.CreateStreamDepot(dst.Depot()))
+	sh.Must(pf.CreateMainlineStream(dst.Depot(), dst.StreamName()))
+	stream := fmt.Sprintf("//%s/%s", dst.Depot(), dst.StreamName())
+	dstRoot := filepath.Join("local", dst.Root())
+	sh.Must(pf.CreateStreamClient(dst.Client(), dstRoot, stream))
 
-	pf.Client = client
+	pf.Client = dst.Client()
 	cl, err := pf.CreateEmptyChangelist("longtest")
 	sh.Must(err)
 
@@ -374,16 +390,74 @@ func AddAppleFile(server *p4.P4, cl int64, filename, resource, data string) erro
 	return server.Add([]string{filename}, p4.Type("apple"), p4.Changelist(cl), p4.DoNotIgnore)
 }
 
-func WriteConfig(file string, dstPort int, dstPath string) error {
+func WriteConfig(file string, src Server, dst Server) error {
 	var cfg config.Config
-	cfg.Src.P4Port = "1667"
-	cfg.Src.P4User = "super"
-	cfg.Src.P4Client = "super-UE4-Release-4.20"
-	cfg.Dst.P4Port = strconv.Itoa(dstPort)
-	cfg.Dst.P4User = "super"
-	cfg.Dst.ClientName = "super-test-engine-p4harmonize"
-	cfg.Dst.ClientRoot = dstPath
-	cfg.Dst.ClientStream = "//test/engine"
+	cfg.Src.P4Port = src.Port()
+	cfg.Src.P4User = src.User()
+	cfg.Src.P4Client = src.Client()
+	cfg.Dst.P4Port = dst.Port()
+	cfg.Dst.P4User = dst.User()
+	cfg.Dst.ClientName = dst.Client()
+	cfg.Dst.ClientRoot = dst.Root()
+	cfg.Dst.ClientStream = dst.StreamPath()
 
 	return cfg.WriteToFile(file)
+}
+
+func BuildDepotFilesLists(p4src, p4dst *p4.P4) (srcFiles, dstFiles string, err error) {
+	// helper to grab a list of files from one server
+	getFilesAsString := func(pf *p4.P4) (string, error) {
+		files, err := pf.ListDepotFiles()
+		if err != nil {
+			return "", err
+		}
+		sort.Sort(p4.DepotFileCaseInsensitive(files))
+		var sb strings.Builder
+		sb.Grow(32 * 1024)
+		for _, v := range files {
+			sb.WriteString(`   "`)
+			sb.WriteString(v.Path)
+			sb.WriteString(`" #`)
+			sb.WriteString(v.Type)
+			sb.WriteString(`" `)
+			sb.WriteString(v.Digest)
+			sb.WriteString("\n")
+		}
+		return sb.String(), nil
+	}
+
+	type result struct {
+		pf   *p4.P4
+		list string
+		err  error
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	var srcList, dstList string
+	var srcErr, dstErr error
+
+	go func() {
+		defer wg.Done()
+		srcList, srcErr = getFilesAsString(p4src)
+	}()
+	go func() {
+		defer wg.Done()
+		dstList, dstErr = getFilesAsString(p4dst)
+	}()
+
+	wg.Wait()
+
+	if srcErr != nil && dstErr != nil {
+		return "", "", fmt.Errorf("Errors listing depot files from both %s and %s: %v; %v", p4src.Port, p4dst.Port, srcErr, dstErr)
+	}
+	if srcErr != nil {
+		return "", "", fmt.Errorf("Error listing depot files from %s: %w", p4src.Port, srcErr)
+	}
+	if dstErr != nil {
+		return "", "", fmt.Errorf("Error listing depot files from %s: %w", p4dst.Port, dstErr)
+	}
+
+	return srcList, dstList, nil
 }
