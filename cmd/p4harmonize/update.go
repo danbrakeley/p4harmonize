@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/danbrakeley/bsh"
+	"github.com/proletariatgames/p4harmonize/internal/config"
 	"github.com/proletariatgames/p4harmonize/internal/p4"
 )
 
@@ -17,7 +18,7 @@ type srcThreadResults struct {
 	Files      []p4.DepotFile
 }
 
-func Harmonize(log Logger, cfg Config) error {
+func Harmonize(log Logger, cfg config.Config) error {
 	var chSrc chan srcThreadResults
 	defer func() {
 		// TODO: This is a quick hack to ensure the sync thread isn't left dangling due to returning early, but
@@ -63,7 +64,7 @@ func Harmonize(log Logger, cfg Config) error {
 
 	log.Info("Creating client %s on %s...", cfg.Dst.ClientName, p4dst.DisplayName())
 
-	err = p4dst.CreateClient(cfg.Dst.ClientName, cfg.Dst.ClientRoot, cfg.Dst.ClientStream)
+	err = p4dst.CreateStreamClient(cfg.Dst.ClientName, cfg.Dst.ClientRoot, cfg.Dst.ClientStream)
 	if err != nil {
 		return fmt.Errorf("Failed to create client %s: %w", p4dst.Client, err)
 	}
@@ -125,7 +126,7 @@ func Harmonize(log Logger, cfg Config) error {
 
 	log.Info("Creating changelist in destination...")
 
-	cl, err := p4dst.CreateChangelist("p4harmonize")
+	cl, err := p4dst.CreateEmptyChangelist("p4harmonize")
 	if err != nil {
 		return fmt.Errorf("Unable to create new changelist: %v", err)
 	}
@@ -225,7 +226,7 @@ func Harmonize(log Logger, cfg Config) error {
 			pathsToAdd = append(pathsToAdd, dstPathForAdd)
 		}
 
-		if err := p4dst.Add(pathsToAdd, p4.Changelist(cl), p4.Type(srcType)); err != nil {
+		if err := p4dst.Add(pathsToAdd, p4.Changelist(cl), p4.Type(srcType), p4.DoNotIgnore); err != nil {
 			return fmt.Errorf("Unable to open %d file(s) for add: %w", len(pathsToAdd), err)
 		}
 	}
@@ -251,7 +252,7 @@ func Harmonize(log Logger, cfg Config) error {
 
 // preFlightChecks performs quick checks to ensure we're in a good state, before
 // doing any action that might take a while to complete.
-func preFlightChecks(log Logger, cfg Config) error {
+func preFlightChecks(log Logger, cfg config.Config) error {
 	sh := MakeLoggingBsh(log)
 
 	log.Info("Checking login ticket status...")
@@ -304,7 +305,7 @@ func preFlightChecks(log Logger, cfg Config) error {
 
 // srcSyncAndList connects to the source perforce server, syncs to head, then
 // requests a list of all file names and types.
-func srcSyncAndList(log Logger, cfg Config) srcThreadResults {
+func srcSyncAndList(log Logger, cfg config.Config) srcThreadResults {
 	sh := MakeLoggingBsh(log)
 	p4src := p4.New(sh, cfg.Src.P4Port, cfg.Src.P4User, cfg.Src.P4Client)
 

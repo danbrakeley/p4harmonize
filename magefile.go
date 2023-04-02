@@ -55,64 +55,20 @@ func Run() {
 
 // LongTest runs a fresh build of p4harmonize against test files in docker-hosted perforce servers.
 func LongTest() {
-	mg.SerialDeps(Build, TestPrep)
+	mg.SerialDeps(Build, TestUp)
 
-	target := sh.ExeName(p4harmonize)
+	// TODO: FIXME: This sleep is to reduce the chance of a race condition where prep.sh runs before
+	// the perforce servers are actually accepting connections. I've only seen this issue on linux
+	// (which was running in Windows via VMWare), and it was inconsistent.
+	// Ideally there would be some check we could make here instead of just waiting and hoping.
+	time.Sleep(time.Second)
 
-	sh.InDir("local", func() {
-		sh.Echof("Running %s against case sensitive server...", target)
-		sh.Cmdf("./%s -config ../test/config.toml", target).Run()
-	})
-	sh.InDir("test", func() {
-		sh.Echo("Submitting p4harmonize's CL...")
-		sh.Cmdf("./submit.sh 1668 3").Bash()
-		sh.Echo("Verifying depot files in both servers match...")
-		sh.Cmdf("./verify.sh 1667 1668").Bash()
-	})
-
-	sh.InDir("local", func() {
-		sh.Echof("Running %s against case insensitive server (first pass)...", target)
-		sh.Cmdf("./%s -config ../test/config_insensitive.toml", target).Run()
-	})
-	sh.InDir("test", func() {
-		sh.Echo("Submitting p4harmonize's CL...")
-		sh.Cmdf("./submit.sh 1669 3").Bash()
-	})
-	sh.RemoveAll("./local/p4/dst_ins")
-	sh.Cmdf("p4 -p 1669 -u super client -d super-test-engine-p4harmonize").Run()
-	sh.InDir("local", func() {
-		sh.Echof("Running %s against case insensitive server (second pass)...", target)
-		sh.Cmdf("./%s -config ../test/config_insensitive.toml", target).Run()
-	})
-	sh.InDir("test", func() {
-		sh.Echo("Submitting p4harmonize's CL...")
-		sh.Cmdf("./submit.sh 1669 4").Bash()
-		sh.Echo("Verifying depot files in both servers match...")
-		sh.Cmdf("./verify.sh 1667 1669").Bash()
-	})
+	sh.Cmdf("go run ./cmd/longtest/main.go").Run()
 
 	sh.Echo("***")
 	sh.Echo("*** Integration Test Passed!")
 	sh.Echo("***")
 	TestDown()
-}
-
-// TestPrep runs testDown, then testUp, then executes `test/prep.sh` to fill the servers with test data.
-func TestPrep() {
-	mg.SerialDeps(TestDown, TestUp)
-	sh.InDir("test", func() {
-		sh.Echo("Running test/prep.sh...")
-
-		// TODO: FIXME: This sleep is to reduce the chance of a race condition where prep.sh runs before
-		// the perforce servers are actually accepting connections. I've only seen this issue on linux
-		// (which was running in Windows via VMWare), and it was inconsistent.
-		// Ideally there would be some check we could make here instead of just waiting and hoping.
-		time.Sleep(time.Second)
-
-		sh.Cmdf("./prep.sh").Bash()
-	})
-	sh.RemoveAll("./local/p4/dst")
-	sh.RemoveAll("./local/p4/dst_ins")
 }
 
 // TestUp brings up fresh perforce servers via Docker, each with a super user named "super" (no password).

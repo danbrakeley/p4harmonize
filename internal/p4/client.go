@@ -4,29 +4,32 @@ import (
 	"bufio"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
-var reClientName = regexp.MustCompile("^[a-zA-Z0-9_-]+$")
-
-// CreateClient creates a new client with the given parameters
-func (p *P4) CreateClient(clientname string, root string, stream string) error {
-	if !reClientName.MatchString(clientname) {
-		return fmt.Errorf("invalid client name: %s", clientname)
-	}
+// CreateStreamClient creates a new client for the given stream
+func (p *P4) CreateStreamClient(clientname string, root string, stream string) error {
 	absoluteRoot, err := filepath.Abs(root)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path for '%s': %w", root, err)
 	}
-	bashCmd := fmt.Sprintf(
-		`%s --field "Root=%s" --field "Stream=%s" --field "View=%s/... //%s/..." client -o %s | %s client -i`,
-		p.cmd(), absoluteRoot, stream, stream, clientname, clientname, p.cmd(),
-	)
-	err = p.sh.Cmd(bashCmd).BashErr()
-	if err != nil {
-		return fmt.Errorf("error creating client %s: %w", clientname, err)
+
+	// generate a client spec
+	var b strings.Builder
+	b.Grow(512)
+	cmd := fmt.Sprintf(
+		`%s --field "Root=%s" --field "Stream=%s" --field "View=%s/... //%s/..." client -o %s`,
+		p.cmd(), absoluteRoot, stream, stream, clientname, clientname)
+	if err := p.sh.Cmd(cmd).Out(&b).RunErr(); err != nil {
+		return fmt.Errorf("error building client spec: %w", err)
 	}
+
+	// feed the spec back into p4 to create the client
+	specReader := strings.NewReader(b.String())
+	if err := p.sh.Cmdf(`%s client -i`, p.cmd()).In(specReader).RunErr(); err != nil {
+		return fmt.Errorf("error creating client from spec: %w", err)
+	}
+
 	return nil
 }
 
