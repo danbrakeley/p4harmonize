@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// CreateChangelist creates a new changelist
+// CreateEmptyChangelist creates a new changelist
 func (p *P4) CreateEmptyChangelist(description string) (int64, error) {
 	if strings.Contains(description, `"`) {
 		// TODO: this is because of how we're building the change spec below.

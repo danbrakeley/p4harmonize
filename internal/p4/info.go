@@ -17,8 +17,7 @@ type Info struct {
 	CaseHandling CaseType
 }
 
-// Edit checks out one or more existing file(s) from the depot. If your path includes any
-// reserved characters (@#%*), you need to first escape your path with EscapePath.
+// Info runs the info command against the server.
 func (p *P4) Info() (Info, error) {
 	var info Info
 
