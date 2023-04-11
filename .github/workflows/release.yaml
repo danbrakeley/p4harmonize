@@ -7,15 +7,15 @@ on:
 jobs:
   release:
     name: Release Go Binary
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
-      - uses: wangyoucao577/go-release-action@v1.22
+      - uses: actions/checkout@v3
+      - uses: wangyoucao577/go-release-action@v1.37
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           goos: windows
           goarch: amd64
-          goversion: "1.17.5"
+          goversion: "1.20"
           project_path: "./cmd/p4harmonize"
           extra_files: LICENSE.txt README.md
           ldflags:
