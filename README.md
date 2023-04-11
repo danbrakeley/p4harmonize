@@ -2,7 +2,7 @@
 
 ## Important Updates
 
-- As of v0.5.0, bash will no longer be required to run p4harmonize on Windows!
+- As of v0.5.0, bash will no longer be required to run p4harmonize on Windows.
 
 ## Overview
 
@@ -18,7 +18,7 @@ name | description
 
 ## Case-sensitivity
 
-Perforce servers can run in case sensitive or case insensitive modes. When the destination server is running in case insensitive mode, file casing issues can't be fixed with a single move command, and instead must first be deleted, then re-added with the correct case. `p4harmonize` supports doing this work, however it requires the user to run `p4harmonize` twice. If you end up in this situation, `p4harmonize` will explain what to do as the first run finishes.
+Perforce servers can run in case sensitive or case insensitive modes. When the destination server is running in case insensitive mode, file casing issues can't be fixed with a single move command. Instead, files must first be deleted, then re-added with the correct case. `p4harmonize` supports doing this work, however it requires the user to run `p4harmonize` twice. If you end up in this situation, `p4harmonize` will explain what to do as the first run finishes.
 
 ## Install
 
@@ -74,7 +74,7 @@ When it is done, there will be a changelist that must be submitted by hand, givi
   ```text
   git clone https://github.com/proletariatgames/p4harmonize.git
   ```
-- Open a bash prompt in the `p4harmonize` folder that git created in the previous step and run `scripts/setup.sh`
+- Open a bash session (works with git-bash on Windows) in the `p4harmonize` folder that git created in the previous step and run `scripts/setup.sh`
   - This ensures Go is installed and ready
   - This builds [Mage](https://magefile.org) into your $GOPATH/bin folder
 
