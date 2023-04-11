@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/danbrakeley/bsh"
@@ -48,10 +49,8 @@ func Run() {
 
 	target := sh.ExeName(p4harmonize)
 
-	sh.InDir("local", func() {
-		sh.Echo("Running...")
-		sh.Cmdf("%s", target).Run()
-	})
+	sh.Echo("Running...")
+	sh.Cmdf("%s", target).Dir("local").Run()
 }
 
 // LongTest runs a fresh build of p4harmonize against test files in docker-hosted perforce servers.
@@ -59,33 +58,32 @@ func LongTest() {
 	start := time.Now()
 	lap := start
 	defer func() {
-		sh.Echof("total runing time: %v", time.Now().Sub(start))
+		sh.Echof("== total time: %v", time.Now().Sub(start))
 	}()
 
-	mg.SerialDeps(Build)
-	sh.Echof("p4harmonize build time: %v", time.Now().Sub(lap))
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		mg.SerialDeps(Build)
+	}()
+	go func() {
+		defer wg.Done()
+		dockerPrep("local/longtest_docker.log")
+	}()
+	wg.Wait()
+
+	sh.Echof("-- prep time: %v", time.Now().Sub(lap))
 	lap = time.Now()
 
-	testUpCaptureOutput("local/longtest_docker.log")
-	sh.Echof("docker time: %v", time.Now().Sub(lap))
+	sh.Echo("Running longtest...")
+	sh.Cmdf("go run ../cmd/longtest/").Dir("local").Run()
+	sh.Echof("-- longtest time: %v", time.Now().Sub(lap))
 	lap = time.Now()
-
-	sh.Echo("Building longtest...")
-	target := sh.ExeName("longtest")
-	sh.Cmdf(`go build -o local/%s ./cmd/longtest`, target).Run()
-
-	sh.Echof("longtest build time: %v", time.Now().Sub(lap))
-	lap = time.Now()
-
-	sh.InDir("local", func() {
-		sh.Echo("Running longtest...")
-		sh.Cmdf(`./%s`, target).Run()
-	})
 
 	sh.Warn("***")
 	sh.Warn("*** Longtest succeeded! All tests passed!")
 	sh.Warn("***")
-	sh.Echof("longtest run time: %v", time.Now().Sub(lap))
 	sh.Echo("Don't forget to run 'mage testdown' to bring down the servers")
 }
 
@@ -97,20 +95,20 @@ func TestUp() {
 
 // TestDown brings down and removes the docker containers started by TestUp.
 func TestDown() {
-	sh.InDir("test", func() {
-		sh.Echo("Stopping and removing test perforce servers...")
-		sh.Cmdf("docker compose stop -t 1").Run()
-		sh.Cmdf("docker compose rm -f").Run()
-	})
+	sh.Echo("Stopping and removing test perforce servers...")
+	testDown(sh)
 }
 
 func testUp(sh *bsh.Bsh) {
-	sh.InDir("test", func() {
-		sh.Cmdf("docker compose up --detach --force-recreate --build").Run()
-	})
+	sh.Cmdf("docker compose up --detach --force-recreate --build").Dir("test").Run()
 }
 
-func testUpCaptureOutput(logFile string) {
+func testDown(sh *bsh.Bsh) {
+	sh.Cmdf("docker compose stop -t 1").Dir("test").Run()
+	sh.Cmdf("docker compose rm -f").Dir("test").Run()
+}
+
+func dockerPrep(logFile string) {
 	sh.Echof("Bringing up test perforce servers (see '%s' for details)...", logFile)
 	f, err := os.Create(logFile)
 	sh.Must(err)
@@ -131,5 +129,6 @@ func testUpCaptureOutput(logFile string) {
 		sh.Warnf("See '%s' for more info.", logFile)
 		panic(err)
 	})
+	testDown(shDockerLog)
 	testUp(shDockerLog)
 }
