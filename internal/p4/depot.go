@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// CreateStreamDepot creates a depot with type "stream".
 func (p *P4) CreateStreamDepot(name string) error {
 	// generate a depot spec
 	var b strings.Builder
