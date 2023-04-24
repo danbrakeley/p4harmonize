@@ -93,12 +93,11 @@ func mainExit() int {
 	}
 
 	start := time.Now()
-	log := MakeLogger(frog.New(frog.Auto, frog.POLevel(false), frog.POFieldsLeftMsgRight, frog.POFieldIndent(10)), "")
+	log, close := MakeLogger(frog.New(frog.Auto, frog.POLevel(false), frog.POFieldsLeftMsgRight, frog.POFieldIndent(10)))
 	defer func() {
 		dur := time.Now().Sub(start)
 		log.Info("Running Time: %v", dur)
-		log.Logger.SetMinLevel(frog.Info)
-		log.Close()
+		close()
 	}()
 
 	cfg, err := config.LoadFromFile(cfgPath)

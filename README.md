@@ -3,6 +3,7 @@
 ## Important Updates
 
 - As of v0.5.0, bash will no longer be required to run p4harmonize on Windows.
+- Also, the output now uses colors to much better effect (see example image below).
 
 ## Overview
 
@@ -15,6 +16,8 @@ name | description
 `//proj/engine_epic` | exact copy of a specific UE version from Epic's perforce server (p4harmonize targets this stream, no project-specific changes should ever end up here)
 `//proj/engine_merge` | dedicated space for a human to merge main with new engine drops; ideally QA will sign off on a build from this branch before the merged engine changes are brought to main
 `//proj/main` | our mainline; lots of people work here, so a broken build can be very costly
+
+![The output of v0.5.0 when there are no changes](images/0.5.0-no-changes.png)
 
 ## Case-sensitivity
 
@@ -112,6 +115,5 @@ Thanks to [Bohdon Sayre](https://github.com/bohdon) and [Jørgen P. Tjernø](htt
 
 ## TODO:
 
-- clean up output to be more readable
 - run longtest via github actions?
 - test on a Mac (maybe with github actions?)

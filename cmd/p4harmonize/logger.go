@@ -8,52 +8,117 @@ import (
 	"github.com/danbrakeley/frog"
 )
 
+// Logger is a logging interface unique to p4harmonize.
+// The intention here is to abstract the underlying logging library.
 type Logger interface {
-	Close()
-	MakeChildLogger(id string) Logger
+	Src() Logger
+	Dst() Logger
+
 	Info(format string, args ...interface{})
 	Verbose(format string, args ...interface{})
 	Warning(format string, args ...interface{})
 	Error(format string, args ...interface{})
+
+	InfoFast(msg string)
+	VerboseFast(msg string)
+	WarningFast(msg string)
+	ErrorFast(msg string)
 }
 
 type FrogLog struct {
-	Logger frog.RootLogger
-	Fields []frog.Fielder
+	Logger  frog.Logger
+	Prefix  string
+	Palette frog.Palette
 }
 
-func MakeLogger(l frog.RootLogger, id string) FrogLog {
+func MakeLogger(l frog.RootLogger) (log Logger, close func()) {
 	l.SetMinLevel(frog.Verbose)
-	return FrogLog{Logger: l}
+	log = &FrogLog{
+		Logger: l,
+		Prefix: "",
+		Palette: frog.Palette{
+			{frog.DarkGray, frog.DarkGray}, // Transient
+			{frog.Cyan, frog.DarkGray},     // Verbose
+			{frog.White, frog.DarkGray},    // Info
+			{frog.Yellow, frog.DarkGray},   // Warning
+			{frog.Red, frog.DarkGray},      // Error
+		},
+	}
+	close = func() { l.Close() }
+	return log, close
 }
 
-func (l FrogLog) Close() {
-	l.Logger.Close()
-}
-
-func (l FrogLog) MakeChildLogger(id string) Logger {
-	return FrogLog{
+func (l *FrogLog) Src() Logger {
+	return &FrogLog{
 		Logger: l.Logger,
-		Fields: []frog.Fielder{
-			frog.String("thread", id),
+		Prefix: "  >>- ",
+		Palette: frog.Palette{
+			{frog.DarkGray, frog.DarkBlue}, // Transient
+			{frog.DarkBlue, frog.DarkBlue}, // Verbose
+			{frog.Blue, frog.DarkBlue},     // Info
+			{frog.Yellow, frog.DarkBlue},   // Warning
+			{frog.Red, frog.DarkBlue},      // Error
 		},
 	}
 }
 
-func (l FrogLog) Info(format string, args ...interface{}) {
-	l.Logger.Info(fmt.Sprintf(format, args...), l.Fields...)
+func (l *FrogLog) Dst() Logger {
+	return &FrogLog{
+		Logger: l.Logger,
+		Prefix: "  --> ",
+		Palette: frog.Palette{
+			{frog.DarkGray, frog.DarkGreen},  // Transient
+			{frog.DarkGreen, frog.DarkGreen}, // Verbose
+			{frog.Green, frog.DarkGreen},     // Info
+			{frog.Yellow, frog.DarkGreen},    // Warning
+			{frog.Red, frog.DarkGreen},       // Error
+		},
+	}
 }
 
-func (l FrogLog) Verbose(format string, args ...interface{}) {
-	l.Logger.Verbose(fmt.Sprintf(format, args...), l.Fields...)
+func (l *FrogLog) logImpl(level frog.Level, format string, args ...interface{}) {
+	l.Logger.LogImpl(
+		level,
+		l.Prefix+fmt.Sprintf(format, args...),
+		nil,
+		[]frog.PrinterOption{frog.POPalette(l.Palette)},
+		frog.ImplData{},
+	)
+}
+func (l *FrogLog) logImplFast(level frog.Level, msg string) {
+	l.Logger.LogImpl(
+		level,
+		l.Prefix+msg,
+		nil,
+		[]frog.PrinterOption{frog.POPalette(l.Palette)},
+		frog.ImplData{},
+	)
 }
 
-func (l FrogLog) Warning(format string, args ...interface{}) {
-	l.Logger.Warning(fmt.Sprintf(format, args...), l.Fields...)
+func (l *FrogLog) Info(format string, args ...interface{}) {
+	l.logImpl(frog.Info, format, args...)
+}
+func (l *FrogLog) Verbose(format string, args ...interface{}) {
+	l.logImpl(frog.Verbose, format, args...)
+}
+func (l *FrogLog) Warning(format string, args ...interface{}) {
+	l.logImpl(frog.Warning, format, args...)
+}
+func (l *FrogLog) Error(format string, args ...interface{}) {
+	l.logImpl(frog.Error, format, args...)
 }
 
-func (l FrogLog) Error(format string, args ...interface{}) {
-	l.Logger.Error(fmt.Sprintf(format, args...), l.Fields...)
+func (l *FrogLog) InfoFast(msg string) {
+	l.logImplFast(frog.Info, msg)
+}
+func (l *FrogLog) VerboseFast(msg string) {
+	l.logImplFast(frog.Verbose, msg)
+}
+func (l *FrogLog) WarningFast(msg string) {
+	l.logImplFast(frog.Warning, msg)
+}
+func (l *FrogLog) ErrorFast(msg string) {
+	l.logImplFast(frog.Error, msg)
 }
 
 // create an io.Writer that treats each logged line as a call to log.Info
@@ -63,7 +128,7 @@ func LogWriter(l Logger) io.Writer {
 	go func() {
 		s := bufio.NewScanner(r)
 		for s.Scan() {
-			l.Info("%s", s.Text())
+			l.InfoFast(s.Text())
 		}
 	}()
 	return w
@@ -74,7 +139,7 @@ func LogVerboseWriter(l Logger) io.Writer {
 	go func() {
 		s := bufio.NewScanner(r)
 		for s.Scan() {
-			l.Verbose("%s", s.Text())
+			l.VerboseFast(s.Text())
 		}
 	}()
 	return w
@@ -85,7 +150,7 @@ func LogWarningWriter(l Logger) io.Writer {
 	go func() {
 		s := bufio.NewScanner(r)
 		for s.Scan() {
-			l.Warning("%s", s.Text())
+			l.WarningFast(s.Text())
 		}
 	}()
 	return w
