@@ -45,12 +45,12 @@ func Build() {
 
 // Run runs unit tests, builds, and runs the app
 func Run() {
-	mg.Deps(Build)
+	mg.SerialDeps(Build)
 
 	target := sh.ExeName(p4harmonize)
 
 	sh.Echo("Running...")
-	sh.Cmdf("%s", target).Dir("local").Run()
+	sh.Cmdf("./%s", target).Dir("local").Run()
 }
 
 // LongTest runs a fresh build of p4harmonize against test files in docker-hosted perforce servers.
