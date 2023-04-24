@@ -18,22 +18,18 @@ func createLongtestLogger(filename string) (close func() error, log frog.Logger,
 	conlog := frog.New(frog.Auto, frog.POTime(false), frog.POLevel(false), frog.POFieldsLeftMsgRight)
 
 	// file logger
-	filelog := frog.NewUnbuffered(f, &frog.TextPrinter{
-		Palette:          frog.PalNone,
-		PrintTime:        true,
-		FieldIndent:      20,
-		PrintMessageLast: true},
-	)
+	filelog := frog.NewUnbuffered(f, (&frog.TextPrinter{}).SetOptions(
+		frog.POTime(true),
+		frog.POFieldsLeftMsgRight,
+		frog.POFieldIndent(20),
+	))
 	filelog.SetMinLevel(frog.Transient)
 
 	// combined logger
-	log = &frog.TeeLogger{
-		Primary:   conlog,
-		Secondary: filelog,
-	}
+	log, teeClose := frog.NewRootTee(conlog, filelog)
 
 	close = func() error {
-		log.Close()
+		teeClose()
 		return f.Close()
 	}
 

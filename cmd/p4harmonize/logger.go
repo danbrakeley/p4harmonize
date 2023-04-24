@@ -18,11 +18,11 @@ type Logger interface {
 }
 
 type FrogLog struct {
-	Logger frog.Logger
+	Logger frog.RootLogger
 	Fields []frog.Fielder
 }
 
-func MakeLogger(l frog.Logger, id string) FrogLog {
+func MakeLogger(l frog.RootLogger, id string) FrogLog {
 	l.SetMinLevel(frog.Verbose)
 	return FrogLog{Logger: l}
 }
