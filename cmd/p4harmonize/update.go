@@ -13,7 +13,7 @@ import (
 )
 
 type srcThreadResults struct {
-	Error      error
+	Success    bool
 	ClientRoot string
 	Files      []p4.DepotFile
 }
@@ -21,16 +21,9 @@ type srcThreadResults struct {
 func Harmonize(log Logger, cfg config.Config) error {
 	var chSrc chan srcThreadResults
 	defer func() {
-		// TODO: This is a quick hack to ensure the sync thread isn't left dangling due to returning early, but
-		// ideally we'd have a solution that is less prone to drift between this code and the function body.
+		// if we try to early out before our goroutine is done, then wait for it
 		if chSrc != nil {
-			log.Warning("Something went wrong, but waiting for thread to complete before handling the error...")
-			str := <-chSrc
-			if str.Error != nil {
-				log.Error("Thread also had an error: %v", str.Error)
-			} else {
-				log.Info("Thread finished without error.")
-			}
+			<-chSrc
 		}
 	}()
 
@@ -38,70 +31,76 @@ func Harmonize(log Logger, cfg config.Config) error {
 
 	// Ensure dst root folder and dst client don't already exist
 
-	if err = preFlightChecks(log, cfg); err != nil {
-		return err
+	if !preFlightChecks(log, cfg) {
+		return fmt.Errorf("pre-flight checks failed")
 	}
 
-	// Start sync from src in the background
+	// Start sync from src in a goroutine
 
-	logSrc := log.MakeChildLogger("source")
+	logSrc := log.Src()
+	shSrc := MakeLoggingBsh(logSrc)
 	chSrc = make(chan srcThreadResults)
 	go func() {
 		defer close(chSrc)
-		chSrc <- srcSyncAndList(logSrc, cfg)
+		chSrc <- srcSyncAndList(logSrc, shSrc, cfg)
 	}()
 
 	// Grab dst info and create dst client
 
-	sh := MakeLoggingBsh(log)
-	p4dst := p4.New(sh, cfg.Dst.P4Port, cfg.Dst.P4User, "")
+	logDst := log.Dst()
+	shDst := MakeLoggingBsh(logDst)
+	p4dst := p4.New(shDst, cfg.Dst.P4Port, cfg.Dst.P4User, "")
 
-	log.Info("Retrieving info for server %s", p4dst.DisplayName())
+	logDst.Info("Retrieving info for server %s", p4dst.DisplayName())
 	info, err := p4dst.Info()
 	if err != nil {
-		return fmt.Errorf("Failed getting info from server %s: %w", p4dst.DisplayName(), err)
+		logDst.Error("Failed getting info from server %s: %w", p4dst.DisplayName(), err)
+		return fmt.Errorf("error prepping destination server")
 	}
 
-	log.Info("Creating client %s on %s...", cfg.Dst.ClientName, p4dst.DisplayName())
+	logDst.Info("Creating client %s on %s...", cfg.Dst.ClientName, p4dst.DisplayName())
 
 	err = p4dst.CreateStreamClient(cfg.Dst.ClientName, cfg.Dst.ClientRoot, cfg.Dst.ClientStream)
 	if err != nil {
-		return fmt.Errorf("Failed to create client %s: %w", p4dst.Client, err)
+		logDst.Error("Failed to create client %s: %w", p4dst.Client, err)
+		return fmt.Errorf("error prepping destination server")
 	}
 	// set p4dst's client and stream name
 	p4dst.Client = cfg.Dst.ClientName
 	err = p4dst.SetStreamName(cfg.Dst.ClientStream)
 	if err != nil {
-		return err
+		logDst.Error("Unexpected error calling SetStreamName(%s): %v", cfg.Dst.ClientStream, err)
+		return fmt.Errorf("error prepping destination server")
 	}
 
 	// Force perforce to think you have synced everything already
 
-	log.Info("Slamming %s to head without transferring any files...", cfg.Dst.ClientName)
-
+	logDst.Info("Slamming %s to head without transferring any files...", cfg.Dst.ClientName)
 	err = p4dst.SyncLatestNoDownload()
 	if err != nil {
-		return err
+		logDst.Error("Failed to update server's view of your local files: %v", err)
+		return fmt.Errorf("error prepping destination server")
 	}
 
 	// Grab the full list of files
 
-	log.Info("Downloading list of current depot files in destination...")
-
+	logDst.Info("Downloading list of current depot files in destination...")
 	dstFiles, err := p4dst.ListDepotFiles()
 	if err != nil {
-		return fmt.Errorf("Failed to list destination files: %w", err)
+		logDst.Error("Failed to list destination files: %v", err)
+		return fmt.Errorf("error prepping destination server")
 	}
 
 	// block until sync source sync completes
 	srcRes := <-chSrc
 	chSrc = nil
-	if srcRes.Error != nil {
-		return fmt.Errorf("Failed in source thread: %w", srcRes.Error)
+	if srcRes.Success != true {
+		return fmt.Errorf("error syncing from source server")
 	}
 
-	if !sh.IsDir(srcRes.ClientRoot) {
-		return fmt.Errorf("Client root '%s' is missing or is not a folder", srcRes.ClientRoot)
+	if !shSrc.IsDir(srcRes.ClientRoot) {
+		logSrc.Error("Client root '%s' is missing or is not a folder", srcRes.ClientRoot)
+		return fmt.Errorf("unexpected local file error")
 	}
 
 	log.Info("Reconciling file lists from source and destination...")
@@ -116,26 +115,27 @@ func Harmonize(log Logger, cfg config.Config) error {
 	// early out if there's nothing to reconcile
 	if !diff.HasDifference() {
 		log.Info("All files in source and destination already match, so no harmonizing necessary.")
-		log.Info("Removing unused client...")
+		logDst.Info("Removing unused client...")
 		err := p4dst.DeleteClient(p4dst.Client)
 		if err != nil {
-			return fmt.Errorf("Error deleting client %s: %w", p4dst.Client, err)
+			logDst.Error("Error deleting client %s: %v", p4dst.Client, err)
+			return fmt.Errorf("error cleaning up")
 		}
 		return nil
 	}
 
-	log.Info("Creating changelist in destination...")
-
+	logDst.Info("Creating changelist in destination...")
 	cl, err := p4dst.CreateEmptyChangelist("p4harmonize")
 	if err != nil {
-		return fmt.Errorf("Unable to create new changelist: %v", err)
+		logDst.Error("Unable to create new changelist: %v", err)
+		return fmt.Errorf("error prepping for changes")
 	}
 
-	log.Info("Changelist %d created.", cl)
-
+	logDst.Info("Changelist %d created.", cl)
 	dstClientRoot, err := filepath.Abs(cfg.Dst.ClientRoot)
 	if err != nil {
-		return fmt.Errorf("Unable to get absolute path for '%s': %w", cfg.Dst.ClientRoot, err)
+		logDst.Error("Unable to get absolute path for '%s': %v", cfg.Dst.ClientRoot, err)
+		return fmt.Errorf("error prepping for changes")
 	}
 
 	var pathsToDelete []string
@@ -162,7 +162,8 @@ func Harmonize(log Logger, cfg config.Config) error {
 		}
 	}
 	if err := p4dst.Delete(pathsToDelete, p4.Changelist(cl)); err != nil {
-		return fmt.Errorf("Unable to mark %d file(s) for delete: %w", len(pathsToDelete), err)
+		logDst.Error("Unable to mark %d file(s) for delete: %w", len(pathsToDelete), err)
+		return fmt.Errorf("error while building changelist")
 	}
 
 	// For each file with the capitalization or the types different, copy the file, then make
@@ -179,16 +180,19 @@ func Harmonize(log Logger, cfg config.Config) error {
 
 			// copy file from source root to destination root
 			if err := PerforceFileCopy(srcPath, dstPathOld, pair[0].Type); err != nil {
-				return err
+				logDst.Error("%v", err)
+				return fmt.Errorf("error while building changelist")
 			}
 
 			if dstPathOld != dstPathNew {
 				// path has changed, do a single file edit and move
 				if err := p4dst.Edit([]string{dstPathOld}, p4.Changelist(cl), p4.Type(newType)); err != nil {
-					return fmt.Errorf("Unable to open '%s' for edit: %w", dstPathOld, err)
+					logDst.Error("Unable to open '%s' for edit: %w", dstPathOld, err)
+					return fmt.Errorf("error while building changelist")
 				}
 				if err := p4dst.Move(dstPathOld, dstPathNew, p4.Changelist(cl), p4.Type(newType)); err != nil {
-					return fmt.Errorf("Unable to open '%s' for move to '%s': %w", dstPathOld, dstPathNew, err)
+					logDst.Error("Unable to open '%s' for move to '%s': %v", dstPathOld, dstPathNew, err)
+					return fmt.Errorf("error while building changelist")
 				}
 			} else {
 				// add to array for batch edit
@@ -198,7 +202,8 @@ func Harmonize(log Logger, cfg config.Config) error {
 
 		// mark files in destination for edit with type
 		if err := p4dst.Edit(pathsToEdit, p4.Changelist(cl), p4.Type(newType)); err != nil {
-			return fmt.Errorf("Unable to open %d file(s) for edit: %w", len(pathsToEdit), err)
+			logDst.Error("Unable to open %d file(s) for edit: %v", len(pathsToEdit), err)
+			return fmt.Errorf("error while building changelist")
 		}
 	}
 
@@ -214,20 +219,23 @@ func Harmonize(log Logger, cfg config.Config) error {
 
 			// copy file from source root to destination root
 			if err := PerforceFileCopy(srcPath, dstPath, src.Type); err != nil {
-				return err
+				logDst.Error("%v", err)
+				return fmt.Errorf("error while building changelist")
 			}
 
 			// add to the depot
 			dstPathForAdd, err := p4.UnescapePath(dstPath)
 			if err != nil {
-				return fmt.Errorf("Error unescaping '%s': %w", dstPath, err)
+				logDst.Error("Error unescaping '%s': %w", dstPath, err)
+				return fmt.Errorf("error while building changelist")
 			}
 
 			pathsToAdd = append(pathsToAdd, dstPathForAdd)
 		}
 
 		if err := p4dst.Add(pathsToAdd, p4.Changelist(cl), p4.Type(srcType), p4.DoNotIgnore); err != nil {
-			return fmt.Errorf("Unable to open %d file(s) for add: %w", len(pathsToAdd), err)
+			logDst.Error("Unable to open %d file(s) for add: %w", len(pathsToAdd), err)
+			return fmt.Errorf("error while building changelist")
 		}
 	}
 
@@ -235,7 +243,8 @@ func Harmonize(log Logger, cfg config.Config) error {
 	// sometimes digests may not be available, in which case this revert is necessary.
 	// Is that the only case? If so, can we explicitly detect that, and only do this in that case?
 	if err := p4dst.RevertUnchanged(filepath.Join(dstClientRoot, "..."), p4.Changelist(cl)); err != nil {
-		return fmt.Errorf("Unable to revert unchanged files in the destination: %w", err)
+		logDst.Error("Unable to revert unchanged files in the destination: %w", err)
+		return fmt.Errorf("error while building changelist")
 	}
 
 	root, err := filepath.Abs(cfg.Dst.ClientRoot)
@@ -244,6 +253,12 @@ func Harmonize(log Logger, cfg config.Config) error {
 	}
 
 	log.Warning("Success! All changes are waiting in CL #%d. Please review and submit when ready.", cl)
+
+	if len(diff.CaseMismatch) > 0 {
+		log.Error("Due to file casing problems, you will need to re-run p4harmonize after submitting the above CL.")
+		log.Error("See https://portal.perforce.com/s/article/3448 for more details.")
+	}
+
 	log.Info("Remember to delete workspace \"%s\"", cfg.Dst.ClientName)
 	log.Info("and local folder \"%s\"", root)
 
@@ -252,38 +267,46 @@ func Harmonize(log Logger, cfg config.Config) error {
 
 // preFlightChecks performs quick checks to ensure we're in a good state, before
 // doing any action that might take a while to complete.
-func preFlightChecks(log Logger, cfg config.Config) error {
-	sh := MakeLoggingBsh(log)
+func preFlightChecks(log Logger, cfg config.Config) bool {
 
-	log.Info("Checking login ticket status...")
+	// verify we're logged in to both src and dst
 
-	p4src := p4.New(sh, cfg.Src.P4Port, cfg.Src.P4User, "")
+	logSrc := log.Src()
+	shSrc := MakeLoggingBsh(logSrc)
+	p4src := p4.New(shSrc, cfg.Src.P4Port, cfg.Src.P4User, "")
 
 	if needsLogin, err := p4src.NeedsLogin(); err != nil {
-		return fmt.Errorf("Error checking login status on %s: %w", p4src.Port, err)
+		logSrc.Error("Error checking login status on %s: %v", p4src.Port, err)
+		return false
 	} else if needsLogin {
-		return fmt.Errorf("Not logged in. Please run 'p4 -p %s -u %s login' and then try again.", p4src.Port, p4src.User)
+		logSrc.Error("Not logged in. Please run 'p4 -p %s -u %s login' and then try again.", p4src.Port, p4src.User)
+		return false
 	}
 
-	p4dst := p4.New(sh, cfg.Dst.P4Port, cfg.Dst.P4User, "")
+	logDst := log.Dst()
+	shDst := MakeLoggingBsh(logDst)
+	p4dst := p4.New(shDst, cfg.Dst.P4Port, cfg.Dst.P4User, "")
 
 	if needsLogin, err := p4dst.NeedsLogin(); err != nil {
-		return fmt.Errorf("Error checking login status on %s: %w", p4dst.Port, err)
+		logDst.Error("Error checking login status on %s: %v", p4dst.Port, err)
+		return false
 	} else if needsLogin {
-		return fmt.Errorf("Not logged in. Please run 'p4 -p %s -u %s login' and then try again.", p4dst.Port, p4dst.User)
+		logDst.Error("Not logged in. Please run 'p4 -p %s -u %s login' and then try again.", p4dst.Port, p4dst.User)
+		return false
 	}
 
-	log.Info("Checking if destination folder or client already exist...")
+	// verify destination folders and clients we want to create don't already exist
 
-	if sh.Exists(cfg.Dst.ClientRoot) {
-		return fmt.Errorf("Destination client root '%s' already exists. "+
-			"Please delete it, or change destination.new_client_root in your config file, then try again.",
-			cfg.Dst.ClientRoot)
+	if shDst.Exists(cfg.Dst.ClientRoot) {
+		logDst.Error("Destination client root '%s' already exists.", cfg.Dst.ClientRoot)
+		logDst.Error("Please delete it, or change `destination.new_client_root` in your config file, then try again.")
+		return false
 	}
 
 	clients, err := p4dst.ListClients()
 	if err != nil {
-		return fmt.Errorf("Failed to get clients from %s: %w", cfg.Dst.P4Port, err)
+		logDst.Error("Failed to get clients from %s: %v", cfg.Dst.P4Port, err)
+		return false
 	}
 
 	hasClient := false
@@ -295,43 +318,47 @@ func preFlightChecks(log Logger, cfg config.Config) error {
 	}
 
 	if hasClient {
-		return fmt.Errorf("Destination client %s already exists on %s. "+
-			"Please delete it, or change destination.new_client_name in your config file, then try again.",
-			cfg.Dst.ClientName, cfg.Dst.P4Port)
+		logDst.Error("Destination client %s already exists on %s.", cfg.Dst.ClientName, cfg.Dst.P4Port)
+		logDst.Error("Please delete it, or change `destination.new_client_name` in your config file, then try again.")
+		return false
 	}
 
-	return nil
+	return true
 }
 
 // srcSyncAndList connects to the source perforce server, syncs to head, then
 // requests a list of all file names and types.
-func srcSyncAndList(log Logger, cfg config.Config) srcThreadResults {
-	sh := MakeLoggingBsh(log)
-	p4src := p4.New(sh, cfg.Src.P4Port, cfg.Src.P4User, cfg.Src.P4Client)
+func srcSyncAndList(logSrc Logger, shSrc *bsh.Bsh, cfg config.Config) srcThreadResults {
+	p4src := p4.New(shSrc, cfg.Src.P4Port, cfg.Src.P4User, cfg.Src.P4Client)
 
 	spec, err := p4src.GetClientSpec()
 	if err != nil {
-		return srcThreadResults{Error: err}
+		logSrc.Error("Failed to get client spec: %v", err)
+		return srcThreadResults{Success: false}
 	}
 	root, exists := spec["Root"]
 	if !exists {
-		return srcThreadResults{Error: fmt.Errorf("Missing field Root in client spec %s", p4src.Client)}
+		logSrc.Error("Missing field `Root` in client spec %s", p4src.Client)
+		return srcThreadResults{Success: false}
 	}
 
-	log.Info("Getting latest from source...")
+	logSrc.Info("Getting latest from source...")
 
 	if err := p4src.SyncLatest(); err != nil {
-		return srcThreadResults{Error: err}
+		logSrc.Error("Failed to sync latest: %v", err)
+		return srcThreadResults{Success: false}
 	}
 
-	log.Info("Downloading list of files with types from source...")
+	logSrc.Info("Downloading list of files with types from source...")
 
 	files, err := p4src.ListDepotFiles()
 	if err != nil {
-		return srcThreadResults{Error: fmt.Errorf("Failed to list files from source: %w", err)}
+		logSrc.Error("Failed to list files from source: %v", err)
+		return srcThreadResults{Success: false}
 	}
 
 	return srcThreadResults{
+		Success:    true,
 		ClientRoot: root,
 		Files:      files,
 	}
