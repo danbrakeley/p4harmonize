@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/danbrakeley/bsh"
-	"github.com/proletariatgames/p4harmonize/internal/config"
-	"github.com/proletariatgames/p4harmonize/internal/p4"
+	"github.com/danbrakeley/p4harmonize/internal/config"
+	"github.com/danbrakeley/p4harmonize/internal/p4"
 )
 
 type srcThreadResults struct {

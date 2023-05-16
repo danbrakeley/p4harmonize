@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/proletariatgames/p4harmonize/internal/p4"
+	"github.com/danbrakeley/p4harmonize/internal/p4"
 )
 
 type Expected struct {

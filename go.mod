@@ -1,4 +1,4 @@
-module github.com/proletariatgames/p4harmonize
+module github.com/danbrakeley/p4harmonize
 
 go 1.16
 

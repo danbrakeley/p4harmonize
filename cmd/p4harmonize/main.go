@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/danbrakeley/frog"
-	"github.com/proletariatgames/p4harmonize/internal/buildvar"
-	"github.com/proletariatgames/p4harmonize/internal/config"
+	"github.com/danbrakeley/p4harmonize/internal/buildvar"
+	"github.com/danbrakeley/p4harmonize/internal/config"
 )
 
 func PrintUsage() {
@@ -21,7 +21,7 @@ func PrintUsage() {
 	if len(buildvar.BuildTime) > 0 {
 		buildTime = buildvar.BuildTime
 	}
-	url := "https://github.com/proletariatgames/p4harmonize"
+	url := "https://github.com/danbrakeley/p4harmonize"
 	if len(buildvar.ReleaseURL) > 0 {
 		url = buildvar.ReleaseURL
 	}

@@ -36,9 +36,9 @@ func Build() {
 
 	sh.Cmdf(
 		`go build -ldflags '`+
-			`-X "github.com/proletariatgames/p4harmonize/internal/buildvar.Version=%s" `+
-			`-X "github.com/proletariatgames/p4harmonize/internal/buildvar.BuildTime=%s" `+
-			`-X "github.com/proletariatgames/p4harmonize/internal/buildvar.ReleaseURL=https://github.com/proletariatgames/p4harmonize"`+
+			`-X "github.com/danbrakeley/p4harmonize/internal/buildvar.Version=%s" `+
+			`-X "github.com/danbrakeley/p4harmonize/internal/buildvar.BuildTime=%s" `+
+			`-X "github.com/danbrakeley/p4harmonize/internal/buildvar.ReleaseURL=https://github.com/danbrakeley/p4harmonize"`+
 			`' -o local/%s ./cmd/%s`, commit, time.Now().Format(time.RFC3339), target, p4harmonize,
 	).Run()
 }

@@ -2,6 +2,7 @@
 
 ## Important Updates
 
+- As of 2023-05-16, this depot has been transferred from `proletariatgames/p4harmonize` to `danbrakeley/p4harmonize`.
 - As of v0.5.0, bash will no longer be required to run p4harmonize on Windows.
 - Also, the output now uses colors to much better effect (see example image below).
 
@@ -9,7 +10,7 @@
 
 `p4harmonize` is a tool for mirroring a stream's head revision from one perforce server to another. This includes reconciling files, fixing differences in file name/path capitalization, fixing the file type, and fixing improperly checked in %AppleDouble files.
 
-`p4harmonize` was built with Unreal Engine source in mind, where the Epic licensee perforce server is used as the source, and a dedicated stream on a project's perforce server is used as the destination. It is intended to be used with a setup similar to [the one recommended by Epic](https://docs.unrealengine.com/4.26/en-US/ProgrammingAndScripting/ProgrammingWithCPP/DownloadingSourceCode/UpdatingSourceCode/#integrating,merging,andbranching). At Proletariat, we have different names, but the purposes are the same:
+`p4harmonize` was built with Unreal Engine source in mind, where the Epic licensee perforce server is used as the source, and a dedicated stream on a project's perforce server is used as the destination. It is intended to be used with a setup similar to [the one recommended by Epic](https://docs.unrealengine.com/4.26/en-US/ProgrammingAndScripting/ProgrammingWithCPP/DownloadingSourceCode/UpdatingSourceCode/#integrating,merging,andbranching). For example, a recent Unreal project I worked on had the following setup:
 
 name | description
 --- | ---
@@ -25,7 +26,7 @@ Perforce servers can run in case sensitive or case insensitive modes. When the d
 
 ## Install
 
-You can download the latest Windows executable from the [releases page](https://github.com/proletariatgames/p4harmonize/releases), or you can build it yourself.
+You can download the latest Windows executable from the [releases page](https://github.com/danbrakeley/p4harmonize/releases), or you can build it yourself.
 
 To build your own, see the [Developement Setup](#development-setup) section below.
 
@@ -75,7 +76,7 @@ When it is done, there will be a changelist that must be submitted by hand, givi
   - On Linux you'll want [Docker Server](https://docs.docker.com/engine/install/#server).
 - Clone the github repo:
   ```text
-  git clone https://github.com/proletariatgames/p4harmonize.git
+  git clone https://github.com/danbrakeley/p4harmonize.git
   ```
 - Open a bash session (works with git-bash on Windows) in the `p4harmonize` folder that git created in the previous step and run `scripts/setup.sh`
   - This ensures Go is installed and ready

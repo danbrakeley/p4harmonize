@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/danbrakeley/bsh"
-	"github.com/proletariatgames/p4harmonize/internal/p4"
+	"github.com/danbrakeley/p4harmonize/internal/p4"
 )
 
 func setupCommon(pf *p4.P4, srv Server) (cl int64, err error) {

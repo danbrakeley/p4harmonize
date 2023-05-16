@@ -20,8 +20,8 @@ func Test_Escape(t *testing.T) {
 			`100%25 %2A%2A%2A CL%23385 frank%40example.gov`,
 		},
 		{"actual error",
-			`D:\Proletariat\p4harmonize\local\p4\src\Engine\Icon30@2x.png`,
-			`D:\Proletariat\p4harmonize\local\p4\src\Engine\Icon30%402x.png`,
+			`D:\p4harmonize\local\p4\src\Engine\Icon30@2x.png`,
+			`D:\p4harmonize\local\p4\src\Engine\Icon30%402x.png`,
 		},
 	}
 
