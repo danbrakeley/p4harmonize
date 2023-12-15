@@ -12,11 +12,11 @@
 
 `p4harmonize` was built with Unreal Engine source in mind, where the Epic licensee perforce server is used as the source, and a dedicated stream on a project's perforce server is used as the destination. It is intended to be used with a setup similar to [the one recommended by Epic](https://docs.unrealengine.com/4.26/en-US/ProgrammingAndScripting/ProgrammingWithCPP/DownloadingSourceCode/UpdatingSourceCode/#integrating,merging,andbranching). For example, a recent Unreal project I worked on had the following setup:
 
-name | description
---- | ---
-`//proj/engine_epic` | exact copy of a specific UE version from Epic's perforce server (p4harmonize targets this stream, no project-specific changes should ever end up here)
-`//proj/engine_merge` | dedicated space for a human to merge main with new engine drops; ideally QA will sign off on a build from this branch before the merged engine changes are brought to main
-`//proj/main` | our mainline; lots of people work here, so a broken build can be very costly
+| name                  | description                                                                                                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `//proj/engine_epic`  | exact copy of a specific UE version from Epic's perforce server (p4harmonize targets this stream, no project-specific changes should ever end up here)                     |
+| `//proj/engine_merge` | dedicated space for a human to merge main with new engine drops; ideally QA will sign off on a build from this branch before the merged engine changes are brought to main |
+| `//proj/main`         | our mainline; lots of people work here, so a broken build can be very costly                                                                                               |
 
 ![The output of v0.5.0 when there are no changes](images/0.5.0-no-changes.png)
 
