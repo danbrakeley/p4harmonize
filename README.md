@@ -69,7 +69,7 @@ When it is done, there will be a changelist that must be submitted by hand, givi
 ## Development setup
 
 - Ensure you have all the [Runtime requirements](#runtime-requirements)
-- Ensure you have a [recent version of Go (1.17+)](https://go.dev/dl/)
+- Ensure you have a [recent version of Go (1.19+)](https://go.dev/dl/)
   - Ensure that $GOPATH/bin is added to your $PATH environment variable.
 - To run all the tests, you'll want to have Docker installed
   - On Windows and Mac, you'll want [Docker Desktop](https://www.docker.com/products/docker-desktop)
