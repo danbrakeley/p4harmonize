@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -139,7 +138,7 @@ func addFile(server *p4.P4, cl int64, filename, p4type, contents string) error {
 	if err := os.MkdirAll(filepath.Dir(abs), os.ModePerm); err != nil {
 		return fmt.Errorf("error creating dir %s: %w", filepath.Dir(abs), err)
 	}
-	if err := ioutil.WriteFile(abs, []byte(contents), 0666); err != nil {
+	if err := os.WriteFile(abs, []byte(contents), 0666); err != nil {
 		return fmt.Errorf("error writing to %s: %w", abs, err)
 	}
 	return server.Add([]string{abs}, p4.Type(p4type), p4.Changelist(cl), p4.DoNotIgnore)
@@ -173,12 +172,12 @@ func addAppleFile(server *p4.P4, cl int64, filename, resource, data string) erro
 
 	// then write the resource fork
 	path := filepath.Join(filepath.Dir(abs), "%"+filepath.Base(abs))
-	if err := ioutil.WriteFile(path, b, 0666); err != nil {
+	if err := os.WriteFile(path, b, 0666); err != nil {
 		return fmt.Errorf("error writing Apple Double resource fork to %s: %w", path, err)
 	}
 
 	// second write the data to the data fork file
-	if err := ioutil.WriteFile(abs, []byte(data), 0666); err != nil {
+	if err := os.WriteFile(abs, []byte(data), 0666); err != nil {
 		return fmt.Errorf("error writing Apple Double data fork to %s: %w", abs, err)
 	}
 
