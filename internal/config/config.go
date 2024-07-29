@@ -10,14 +10,16 @@ import (
 )
 
 type Source struct {
-	P4Port   string `toml:"p4port"`
-	P4User   string `toml:"p4user"`
-	P4Client string `toml:"p4client"`
+	P4Port    string `toml:"p4port"`
+	P4User    string `toml:"p4user"`
+	P4Charset string `toml:"p4charset"`
+	P4Client  string `toml:"p4client"`
 }
 
 type Destination struct {
 	P4Port       string `toml:"p4port"`
 	P4User       string `toml:"p4user"`
+	P4Charset    string `toml:"p4charset"`
 	ClientName   string `toml:"new_client_name"`
 	ClientRoot   string `toml:"new_client_root"`
 	ClientStream string `toml:"new_client_stream"`
@@ -38,11 +40,11 @@ func (c *Config) Filename() string {
 func (c *Config) WriteToFile(path string) error {
 	f, err := os.Create(path)
 	if err != nil {
-		return fmt.Errorf("Error opening '%s': %w", path, err)
+		return fmt.Errorf("error opening '%s': %w", path, err)
 	}
 
 	if err := toml.NewEncoder(f).Encode(c); err != nil {
-		return fmt.Errorf("Error encoding/writing '%s': %w", path, err)
+		return fmt.Errorf("error encoding/writing '%s': %w", path, err)
 	}
 
 	return nil
@@ -53,7 +55,7 @@ func (c *Config) WriteToFile(path string) error {
 func LoadFromFile(path string) (Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return Config{}, fmt.Errorf("Error opening '%s': %w", path, err)
+		return Config{}, fmt.Errorf("error opening '%s': %w", path, err)
 	}
 	defer f.Close()
 	cfg, err := loadConfig(f)

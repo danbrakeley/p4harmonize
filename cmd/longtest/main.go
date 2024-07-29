@@ -16,10 +16,10 @@ import (
 )
 
 var Servers = []Server{
-	{Src, "1661", "super", "UE4", "Release-4.20", "./p4/1"},
-	{Src, "1662", "super", "UE4", "Release-4.20", "./p4/2"},
-	{Dst, "1663", "super", "test", "engine", "./p4/3"},
-	{Dst, "1664", "super", "test", "engine", "./p4/4"},
+	{Src, "1661", "super", "none", "UE4", "Release-4.20", "./p4/1"},
+	{Src, "1662", "super", "none", "UE4", "Release-4.20", "./p4/2"},
+	{Dst, "1663", "super", "none", "test", "engine", "./p4/3"},
+	{Dst, "1664", "super", "none", "test", "engine", "./p4/4"},
 }
 
 func main() {
@@ -124,7 +124,7 @@ func bringUpServers(logParent frog.Logger, Servers []Server) {
 			defer wg.Done()
 			close, sh := createBshWithTransientLogger(log)
 			defer close()
-			pf := p4.New(sh, s.Port(), s.User(), "")
+			pf := p4.New(sh, s.Port(), s.User(), s.Charset(), "")
 			if s.IsSrc() {
 				if err := setupSrc(sh, pf, s); err != nil {
 					log.Error("error in setupSrc", frog.Err(err))
@@ -132,7 +132,7 @@ func bringUpServers(logParent frog.Logger, Servers []Server) {
 				}
 			} else {
 				if err := setupDst(sh, pf, s); err != nil {
-					log.Error("error in setupSrc", frog.Err(err))
+					log.Error("error in setupDst", frog.Err(err))
 					return
 				}
 			}
@@ -172,7 +172,7 @@ func runTwoServers(log frog.Logger, configSuffix int, src, dst Server, cl int64,
 	for i := 0; i < expectedRuns; i++ {
 
 		// dst's client must not already exist
-		if err := p4.New(sh, dst.Port(), dst.User(), "").DeleteClient(dst.Client()); err != nil {
+		if err := p4.New(sh, dst.Port(), dst.User(), dst.Charset(), "").DeleteClient(dst.Client()); err != nil {
 			return fmt.Errorf("error deleting client %s from %s: %w", dst.Client(), dst.Port(), err)
 		}
 		// dst's root folder must be empty
@@ -189,8 +189,8 @@ func runTwoServers(log frog.Logger, configSuffix int, src, dst Server, cl int64,
 			return fmt.Errorf("p4harmonize with config %s: %w", cfgName, err)
 		}
 
-		p4src := p4.New(sh, src.Port(), src.User(), src.Client())
-		p4dst := p4.New(sh, dst.Port(), dst.User(), dst.Client())
+		p4src := p4.New(sh, src.Port(), src.User(), src.Charset(), src.Client())
+		p4dst := p4.New(sh, dst.Port(), dst.User(), dst.Charset(), dst.Client())
 
 		// submit p4harmonize's changes
 		if err := p4dst.SubmitChangelist(cl); err != nil {
@@ -245,12 +245,6 @@ func buildDepotFilesLists(p4src, p4dst *p4.P4) (srcFiles, dstFiles string, err e
 		return sb.String(), nil
 	}
 
-	type result struct {
-		pf   *p4.P4
-		list string
-		err  error
-	}
-
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -269,13 +263,13 @@ func buildDepotFilesLists(p4src, p4dst *p4.P4) (srcFiles, dstFiles string, err e
 	wg.Wait()
 
 	if srcErr != nil && dstErr != nil {
-		return "", "", fmt.Errorf("Errors listing depot files from both %s and %s: %v; %v", p4src.Port, p4dst.Port, srcErr, dstErr)
+		return "", "", fmt.Errorf("errors listing depot files from both %s and %s: %v; %v", p4src.Port, p4dst.Port, srcErr, dstErr)
 	}
 	if srcErr != nil {
-		return "", "", fmt.Errorf("Error listing depot files from %s: %w", p4src.Port, srcErr)
+		return "", "", fmt.Errorf("error listing depot files from %s: %w", p4src.Port, srcErr)
 	}
 	if dstErr != nil {
-		return "", "", fmt.Errorf("Error listing depot files from %s: %w", p4dst.Port, dstErr)
+		return "", "", fmt.Errorf("error listing depot files from %s: %w", p4dst.Port, dstErr)
 	}
 
 	return srcList, dstList, nil

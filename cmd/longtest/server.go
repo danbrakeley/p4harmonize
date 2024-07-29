@@ -12,12 +12,13 @@ const (
 )
 
 type Server struct {
-	t      ServerType
-	port   string
-	user   string
-	depot  string
-	stream string
-	root   string
+	t       ServerType
+	port    string
+	user    string
+	charset string
+	depot   string
+	stream  string
+	root    string
 }
 
 func (s *Server) IsSrc() bool {
@@ -30,6 +31,10 @@ func (s *Server) IsDst() bool {
 
 func (s *Server) Port() string {
 	return s.port
+}
+
+func (s *Server) Charset() string {
+	return s.charset
 }
 
 func (s *Server) User() string {

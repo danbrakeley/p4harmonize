@@ -14,9 +14,10 @@ import (
 )
 
 type P4 struct {
-	Port   string
-	User   string
-	Client string
+	Port    string
+	User    string
+	Charset string
+	Client  string
 
 	sh *bsh.Bsh
 
@@ -25,12 +26,13 @@ type P4 struct {
 	streamDepthCache int    // read/write requires mutex lock
 }
 
-func New(sh *bsh.Bsh, port, user, client string) *P4 {
+func New(sh *bsh.Bsh, port, user, charset, client string) *P4 {
 	return &P4{
-		Port:   port,
-		User:   user,
-		Client: client,
-		sh:     sh,
+		Port:    port,
+		User:    user,
+		Charset: charset,
+		Client:  client,
+		sh:      sh,
 	}
 }
 
@@ -107,6 +109,10 @@ func (p *P4) cmd() string {
 	if len(p.Client) > 0 {
 		out.WriteString(" -c ")
 		out.WriteString(p.Client)
+	}
+	if len(p.Charset) > 0 {
+		out.WriteString(" -C ")
+		out.WriteString(p.Charset)
 	}
 	return out.String()
 }
@@ -318,13 +324,13 @@ func UnescapePath(path string) (string, error) {
 func WriteTempFile(filepattern, contents string) (fnCleanup func(), filename string, err error) {
 	file, err := os.CreateTemp("", filepattern)
 	if err != nil {
-		return nil, "", fmt.Errorf("Error creating temp file for pattern %s: %w", filepattern, err)
+		return nil, "", fmt.Errorf("error creating temp file for pattern %s: %w", filepattern, err)
 	}
 	defer file.Close()
 
 	_, err = file.WriteString(contents)
 	if err != nil {
-		return nil, "", fmt.Errorf("Error writing temp file for pattern %s: %w", filepattern, err)
+		return nil, "", fmt.Errorf("error writing temp file for pattern %s: %w", filepattern, err)
 	}
 
 	name := file.Name()

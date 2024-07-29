@@ -11,7 +11,7 @@ func createLongtestLogger(filename string) (close func() error, log frog.Logger,
 	// open file
 	f, err := os.Create(filename)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error creating log file %s: %w", filename, err)
+		return nil, nil, fmt.Errorf("error creating log file %s: %w", filename, err)
 	}
 
 	// console logger

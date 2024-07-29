@@ -95,7 +95,7 @@ func mainExit() int {
 	start := time.Now()
 	log, close := MakeLogger(frog.New(frog.Auto, frog.POLevel(false), frog.POFieldsLeftMsgRight, frog.POFieldIndent(10)))
 	defer func() {
-		dur := time.Now().Sub(start)
+		dur := time.Since(start)
 		log.Info("Running Time: %v", dur)
 		close()
 	}()

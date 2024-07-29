@@ -49,7 +49,7 @@ func Harmonize(log Logger, cfg config.Config) error {
 
 	logDst := log.Dst()
 	shDst := MakeLoggingBsh(logDst)
-	p4dst := p4.New(shDst, cfg.Dst.P4Port, cfg.Dst.P4User, "")
+	p4dst := p4.New(shDst, cfg.Dst.P4Port, cfg.Dst.P4User, cfg.Dst.P4Charset, "")
 
 	logDst.Info("Retrieving info for server %s", p4dst.DisplayName())
 	info, err := p4dst.Info()
@@ -94,7 +94,7 @@ func Harmonize(log Logger, cfg config.Config) error {
 	// block until sync source sync completes
 	srcRes := <-chSrc
 	chSrc = nil
-	if srcRes.Success != true {
+	if !srcRes.Success {
 		return fmt.Errorf("error syncing from source server")
 	}
 
@@ -273,7 +273,7 @@ func preFlightChecks(log Logger, cfg config.Config) bool {
 
 	logSrc := log.Src()
 	shSrc := MakeLoggingBsh(logSrc)
-	p4src := p4.New(shSrc, cfg.Src.P4Port, cfg.Src.P4User, "")
+	p4src := p4.New(shSrc, cfg.Src.P4Port, cfg.Src.P4User, cfg.Src.P4Charset, "")
 
 	if needsLogin, err := p4src.NeedsLogin(); err != nil {
 		logSrc.Error("Error checking login status on %s: %v", p4src.Port, err)
@@ -285,7 +285,7 @@ func preFlightChecks(log Logger, cfg config.Config) bool {
 
 	logDst := log.Dst()
 	shDst := MakeLoggingBsh(logDst)
-	p4dst := p4.New(shDst, cfg.Dst.P4Port, cfg.Dst.P4User, "")
+	p4dst := p4.New(shDst, cfg.Dst.P4Port, cfg.Dst.P4User, cfg.Dst.P4Charset, "")
 
 	if needsLogin, err := p4dst.NeedsLogin(); err != nil {
 		logDst.Error("Error checking login status on %s: %v", p4dst.Port, err)
@@ -329,7 +329,7 @@ func preFlightChecks(log Logger, cfg config.Config) bool {
 // srcSyncAndList connects to the source perforce server, syncs to head, then
 // requests a list of all file names and types.
 func srcSyncAndList(logSrc Logger, shSrc *bsh.Bsh, cfg config.Config) srcThreadResults {
-	p4src := p4.New(shSrc, cfg.Src.P4Port, cfg.Src.P4User, cfg.Src.P4Client)
+	p4src := p4.New(shSrc, cfg.Src.P4Port, cfg.Src.P4User, cfg.Src.P4Charset, cfg.Src.P4Client)
 
 	spec, err := p4src.GetClientSpec()
 	if err != nil {
@@ -495,7 +495,7 @@ func PerforceFileCopy(src, dst, filetype string) error {
 func verifyAndCopy(srcPath, dstPath string) error {
 	srcInfo, err := os.Stat(srcPath)
 	if err != nil {
-		return fmt.Errorf("Unable to stat '%s': %w", srcPath, err)
+		return fmt.Errorf("unable to stat '%s': %w", srcPath, err)
 	}
 
 	if !srcInfo.Mode().IsRegular() {
@@ -505,26 +505,26 @@ func verifyAndCopy(srcPath, dstPath string) error {
 
 	dstDir := filepath.Dir(dstPath)
 	if err := os.MkdirAll(dstDir, os.ModePerm); err != nil {
-		return fmt.Errorf("Unable to mkdir '%s': %w", dstDir, err)
+		return fmt.Errorf("unable to mkdir '%s': %w", dstDir, err)
 	}
 
 	s, err := os.Open(srcPath)
 	if err != nil {
-		return fmt.Errorf("Unable to open '%s': %w", srcPath, err)
+		return fmt.Errorf("unable to open '%s': %w", srcPath, err)
 	}
 	defer s.Close()
 
 	d, err := os.Create(dstPath)
 	if err != nil {
-		return fmt.Errorf("Unable to create '%s': %w", dstPath, err)
+		return fmt.Errorf("unable to create '%s': %w", dstPath, err)
 	}
 	defer d.Close()
 	n, err := io.Copy(d, s)
 	if err != nil {
-		return fmt.Errorf("Unable to copy '%s' to '%s': %w", srcPath, dstPath, err)
+		return fmt.Errorf("unable to copy '%s' to '%s': %w", srcPath, dstPath, err)
 	}
 	if n != srcSize {
-		return fmt.Errorf("Expected '%s' to copy %d bytes to '%s', but only %d were copied", srcPath, n, dstPath, srcSize)
+		return fmt.Errorf("expected '%s' to copy %d bytes to '%s', but only %d were copied", srcPath, n, dstPath, srcSize)
 	}
 	return nil
 }

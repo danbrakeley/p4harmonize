@@ -41,12 +41,14 @@ Here's an example `config.toml` file:
 [source]
 p4port = "ssl:perforce.example.com:1667"
 p4user = "user"
+p4charset = "none"
 p4client = "user-UE4-Release-Latest-Minimal" # this needs to exist before running p4harmonize
 
 # destination is the perforce server you want to update so that it matches the source
 [destination]
 p4port = "perforce.local:1666"
 p4user = "localuser"
+p4charset = "auto"
 new_client_name = "localuser-harmonize"   # this will be created by p4harmonize
 new_client_root = "d:/p4/local/harmonize" # this will be created by p4harmonize
 new_client_stream = "//test/engine_epic"  # this needs to already exist
@@ -110,11 +112,12 @@ Before opening a pull request, please run `mage longtest` and make sure it is pa
 
 If your PR includes performance improvements, please include some benchmarks that show the benefits of your changes.
 
-## Special Thanks!
+## Special Thanks
 
 Thanks to [Bohdon Sayre](https://github.com/bohdon) and [Jørgen P. Tjernø](https://github.com/jorgenpt) for contributing time and code to help me fix my bugs and dramatically improve performance!
 
-## TODO:
+## TODO
 
+- add unicode vs non-unicode servers to longtest
 - run longtest via github actions?
 - test on a Mac (maybe with github actions?)
