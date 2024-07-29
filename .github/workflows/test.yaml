@@ -4,13 +4,17 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2019]
-        go-ver: ["1.19"]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v4
+      -
+        uses: actions/checkout@v4
+      -
+        uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-ver }}
-      - run: go test ./...
-      - run: go build ./cmd/p4harmonize
+          go-version-file: go.mod
+      -
+        uses: magefile/mage-action@v3
+        with:
+          version: latest
+          args: ci

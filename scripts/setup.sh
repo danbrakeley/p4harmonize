@@ -1,5 +1,7 @@
 #!/bin/bash -e
-required_minor_version=19
+
+## TODO: read this from go.mod
+required_minor_version=22
 
 cd $(dirname "$0")
 

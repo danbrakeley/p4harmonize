@@ -99,6 +99,11 @@ func TestDown() {
 	testDown(sh)
 }
 
+// CI runs all CI tasks
+func CI() {
+	mg.SerialDeps(Build)
+}
+
 func testUp(sh *bsh.Bsh) {
 	sh.Cmdf("docker compose up --detach --force-recreate --build").Dir("test").Run()
 }
