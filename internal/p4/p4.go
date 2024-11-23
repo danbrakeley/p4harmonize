@@ -2,6 +2,7 @@ package p4
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,7 +23,6 @@ type P4 struct {
 	sh *bsh.Bsh
 
 	streamMutex      sync.Mutex
-	streamNameCache  string // read/write requires mutex lock
 	streamDepthCache int    // read/write requires mutex lock
 }
 
@@ -44,42 +44,71 @@ func (p *P4) DisplayName() string {
 func (p *P4) SetStreamName(stream string) error {
 	p.streamMutex.Lock()
 	defer p.streamMutex.Unlock()
-	depth, err := streamDepth(stream)
-	if err != nil {
-		return err
-	}
-	p.streamNameCache = stream
-	p.streamDepthCache = depth
+	p.streamDepthCache = 0
 	return nil
 }
 
-func (p *P4) StreamInfo() (string, int, error) {
-	p.streamMutex.Lock()
-	defer p.streamMutex.Unlock()
-
-	if len(p.streamNameCache) > 0 {
-		return p.streamNameCache, p.streamDepthCache, nil
-	}
-
+func (p *P4) Depot() (string, error) {
 	spec, err := p.GetClientSpec()
 	if err != nil {
-		return "", 0, fmt.Errorf("error getting stream name: %w", err)
+		return "", fmt.Errorf("error getting depot: %w", err)
 	}
 
 	stream, exists := spec["Stream"]
-	if !exists || len(stream) == 0 {
-		return "", 0, fmt.Errorf("client spec does not include Stream field")
+	if exists && len(stream) > 3 {
+		depotName, err := getDepotName(stream)
+		if err != nil {
+			return "", fmt.Errorf("error getting depot from stream %s: %w", stream, err)
+		}
+		return depotName, nil
 	}
 
-	depth, err := streamDepth(stream)
+	for key, value := range spec {
+		if !strings.HasPrefix(key, "View") {
+			continue
+		}
+
+		depotName, err := getDepotName(value)
+		if err != nil {
+			return "", fmt.Errorf("error getting depot from mapping %s: %w", value, err)
+		}
+		return depotName, nil
+	}
+
+	return "", errors.New("could not find any View or Stream entries in client spec")
+}
+
+func (p *P4) StreamDepth() (int, error) {
+	p.streamMutex.Lock()
+	defer p.streamMutex.Unlock()
+
+	if p.streamDepthCache > 0 {
+		return p.streamDepthCache, nil
+	}
+
+	depot, err := p.Depot()
 	if err != nil {
-		return "", 0, err
+		return 0, err
 	}
 
-	p.streamNameCache = stream
+	depotSpec, err := p.GetDepotSpec(depot)
+	if err != nil {
+		return 0, err
+	}
+
+	depotDepthPath, exists := depotSpec["StreamDepth"]
+	if !exists {
+		return 0, fmt.Errorf("no StreamDepth field in depot spec for %s", depot)
+	}
+
+	depth, err := streamDepth(depotDepthPath)
+	if err != nil {
+		return 0, err
+	}
+
 	p.streamDepthCache = depth
 
-	return stream, depth, nil
+	return depth, nil
 }
 
 func streamDepth(stream string) (int, error) {
@@ -167,7 +196,7 @@ func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
 		return nil, fmt.Errorf("missing '-z tag' in non-fstat cmd: %s", cmd)
 	}
 
-	_, streamDepth, err := p.StreamInfo()
+	streamDepth, err := p.StreamDepth()
 	if err != nil {
 		return nil, err
 	}
@@ -231,6 +260,21 @@ func (p *P4) runAndParseDepotFiles(cmd string) ([]DepotFile, error) {
 	sort.Sort(DepotFileCaseInsensitive(out))
 
 	return out, nil
+}
+
+// getDepotName returns the depot name given a depot path
+// For example: ("//a/b/c/d:foo") would return "a"
+func getDepotName(line string) (string, error) {
+	prefix, err := getDepotPrefix(line, 1)
+	if err != nil {
+		return "", err
+	}
+
+	if len(prefix) < 3 {
+		return "", fmt.Errorf("line '%s' does not have a full depot prefix", line)
+	}
+
+	return prefix[2:len(prefix)-1], nil
 }
 
 // getDepotPrefix returns the stream prefix given a line that includes the prefix and the stream depth
