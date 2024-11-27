@@ -1,5 +1,3 @@
-//go:build mage
-
 package main
 
 import (
@@ -58,7 +56,7 @@ func LongTest() {
 	start := time.Now()
 	lap := start
 	defer func() {
-		sh.Echof("== total time: %v", time.Now().Sub(start))
+		sh.Echof("== total time: %v", time.Since(start))
 	}()
 
 	var wg sync.WaitGroup
@@ -73,13 +71,12 @@ func LongTest() {
 	}()
 	wg.Wait()
 
-	sh.Echof("-- prep time: %v", time.Now().Sub(lap))
+	sh.Echof("-- prep time: %v", time.Since(lap))
 	lap = time.Now()
 
 	sh.Echo("Running longtest...")
 	sh.Cmdf("go run ../cmd/longtest/").Dir("local").Run()
-	sh.Echof("-- longtest time: %v", time.Now().Sub(lap))
-	lap = time.Now()
+	sh.Echof("-- longtest time: %v", time.Since(lap))
 
 	sh.Warn("***")
 	sh.Warn("*** Longtest succeeded! All tests passed!")

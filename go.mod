@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/BurntSushi/toml v1.4.0
-	github.com/danbrakeley/bsh v0.2.1
+	github.com/danbrakeley/bsh v0.2.2
 	github.com/danbrakeley/frog v0.10.2
 	github.com/magefile/mage v1.15.0
 )

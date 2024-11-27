@@ -5,6 +5,8 @@ github.com/danbrakeley/ansi v0.2.2 h1:TfbWntXtF7QMKKoehEGJ4BMwC24DuQ0nQtLWl+qiYy
 github.com/danbrakeley/ansi v0.2.2/go.mod h1:UgVuevQbNorh1SDBSWuw8jmG+QURBskDDqJ31YG6BGQ=
 github.com/danbrakeley/bsh v0.2.1 h1:+GcU7a7KgrSg7QGeQzv0AjFxPrra4EKQm4pG2XeifXY=
 github.com/danbrakeley/bsh v0.2.1/go.mod h1:GpxmXr2fe9l/IXK78x7NAS8K+0zILud5OfdEqBAcZLA=
+github.com/danbrakeley/bsh v0.2.2 h1:ll0qCgSSkz4sB4ZK+v5K+ClmADJ2aW7/oF+Yzxw30oU=
+github.com/danbrakeley/bsh v0.2.2/go.mod h1:GpxmXr2fe9l/IXK78x7NAS8K+0zILud5OfdEqBAcZLA=
 github.com/danbrakeley/commandline v1.0.0 h1:9qOX7wnJxECT0ZEZav6P5/GVdX/xSsPnIwQ9ptpMUuc=
 github.com/danbrakeley/commandline v1.0.0/go.mod h1:TebcfPCZN3Dpc0DZMp68KTbVzCr07KCfAVkrYlLi2is=
 github.com/danbrakeley/frog v0.10.2 h1:3+E+gA1iUJiI9dUVOAiEUj95WiOvokQ84/jsy/h7aKw=
