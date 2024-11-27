@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/danbrakeley/p4harmonize/internal/p4"
 )
 
 type ServerType uint8
@@ -12,13 +14,14 @@ const (
 )
 
 type Server struct {
-	t       ServerType
-	port    string
-	user    string
-	charset string
-	depot   string
-	stream  string
-	root    string
+	t         ServerType
+	port      string
+	user      string
+	charset   string
+	depot     string
+	stream    string
+	root      string
+	depotType p4.DepotType
 }
 
 func (s *Server) IsSrc() bool {
@@ -39,6 +42,10 @@ func (s *Server) Charset() string {
 
 func (s *Server) User() string {
 	return s.user
+}
+
+func (s *Server) DepotType() p4.DepotType {
+	return s.depotType
 }
 
 // depot name, e.g. "UE4"

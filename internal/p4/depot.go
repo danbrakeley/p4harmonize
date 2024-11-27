@@ -5,12 +5,28 @@ import (
 	"strings"
 )
 
-// CreateStreamDepot creates a depot with type "stream".
-func (p *P4) CreateStreamDepot(name string) error {
+// https://help.perforce.com/helix-core/server-apps/cmdref/2024.2/Content/CmdRef/p4_depot.html
+type DepotType string
+
+const (
+	Local DepotType = "local"
+	// Remote DepotType = "remote"
+	Stream DepotType = "stream"
+	// Spec DepotType = "spec"
+	// Unload DepotType = "unload"
+	// Archive DepotType = "archive"
+	// Tangent DepotType = "tangent"
+	// Graph DepotType = "graph"
+	// Trait DepotType = "trait"
+)
+
+// CreateDepot creates a depot.
+func (p *P4) CreateDepot(name string, typ DepotType) error {
 	// generate a depot spec
 	var b strings.Builder
 	b.Grow(256)
-	if err := p.sh.Cmdf(`%s --field "Type=stream" depot -o %s`, p.cmd(), name).Out(&b).RunErr(); err != nil {
+	cmd := fmt.Sprintf(`%s --field "Type=%s" depot -o %s`, p.cmd(), string(typ), name)
+	if err := p.sh.Cmd(cmd).Out(&b).RunErr(); err != nil {
 		return fmt.Errorf("error building depot spec: %w", err)
 	}
 

@@ -1,4 +1,5 @@
 services:
+  ## server pair 1: case insensitive src, but case sensitive dst
   p4src1:
     build:
       context: .
@@ -8,7 +9,18 @@ services:
         CASE_INSENSITIVE: 1
     restart: unless-stopped
     ports:
-      - 1661:1666
+      - 1671:1666
+  p4dst1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVER_ID: dst1
+        CASE_INSENSITIVE: 0
+    restart: unless-stopped
+    ports:
+      - 1681:1666
+  ## server pair 2: case insensitive on both src and dst
   p4src2:
     build:
       context: .
@@ -18,24 +30,35 @@ services:
         CASE_INSENSITIVE: 1
     restart: unless-stopped
     ports:
-      - 1662:1666
+      - 1672:1666
+  p4dst2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVER_ID: dst2
+        CASE_INSENSITIVE: 1
+    restart: unless-stopped
+    ports:
+      - 1682:1666
+  ## server pair 3: case insensitive on both, longtest will not use streams on dst
+  p4src3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVER_ID: src3
+        CASE_INSENSITIVE: 1
+    restart: unless-stopped
+    ports:
+      - 1673:1666
   p4dst3:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         SERVER_ID: dst3
-        CASE_INSENSITIVE: 0
-    restart: unless-stopped
-    ports:
-      - 1663:1666
-  p4dst4:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        SERVER_ID: dst4
         CASE_INSENSITIVE: 1
     restart: unless-stopped
     ports:
-      - 1664:1666
+      - 1683:1666

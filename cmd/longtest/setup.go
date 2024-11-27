@@ -11,14 +11,23 @@ import (
 )
 
 func setupCommon(pf *p4.P4, srv Server) (cl int64, err error) {
-	if err := pf.CreateStreamDepot(srv.Depot()); err != nil {
+	if err := pf.CreateDepot(srv.Depot(), srv.DepotType()); err != nil {
 		return -1, err
 	}
-	if err := pf.CreateMainlineStream(srv.Depot(), srv.StreamName()); err != nil {
-		return -1, err
-	}
-	if err := pf.CreateStreamClient(srv.Client(), srv.Root(), srv.StreamPath()); err != nil {
-		return -1, err
+	switch srv.DepotType() {
+	case p4.Stream:
+		if err := pf.CreateMainlineStream(srv.Depot(), srv.StreamName()); err != nil {
+			return -1, err
+		}
+		if err := pf.CreateStreamClient(srv.Client(), srv.Root(), srv.StreamPath()); err != nil {
+			return -1, err
+		}
+
+	case p4.Local:
+		// no additional work needed
+
+	default:
+		return -1, fmt.Errorf("unsupported depot type %s", srv.DepotType())
 	}
 
 	pf.Client = srv.Client()

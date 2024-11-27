@@ -16,10 +16,12 @@ import (
 )
 
 var Servers = []Server{
-	{Src, "1661", "super", "none", "UE4", "Release-4.20", "./p4/1"},
-	{Src, "1662", "super", "none", "UE4", "Release-4.20", "./p4/2"},
-	{Dst, "1663", "super", "none", "test", "engine", "./p4/3"},
-	{Dst, "1664", "super", "none", "test", "engine", "./p4/4"},
+	{Src, "1671", "super", "none", "UE4", "Release-4.20", "./p4/s1", Stream},
+	{Src, "1672", "super", "none", "UE4", "Release-4.20", "./p4/s2", Stream},
+	{Src, "1672", "super", "none", "UE4", "Release-4.20", "./p4/s3", Stream},
+	{Dst, "1681", "super", "none", "test", "engine", "./p4/d1", Stream},
+	{Dst, "1682", "super", "none", "test", "engine", "./p4/d2", Stream},
+	{Dst, "1683", "super", "none", "test", "", "./p4/d3", Local},
 }
 
 func main() {
